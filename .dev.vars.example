@@ -1,0 +1,7 @@
+TURNSTILE_MODE=real
+TURNSTILE_SECRET_KEY=replace_with_turnstile_secret_key
+# Enable only for local smoke testing together with TURNSTILE_MODE=mock.
+ALLOW_TURNSTILE_MOCK=0
+# Local-only branch marker used by mock triple-lock.
+CF_PAGES_BRANCH=local
+ADMIN_SECRET=replace_with_admin_secret

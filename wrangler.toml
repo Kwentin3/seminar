@@ -1,0 +1,11 @@
+name = "seminar"
+compatibility_date = "2026-02-26"
+pages_build_output_dir = "apps/web/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "seminar-leads"
+# Replace before go-live with real Cloudflare D1 IDs.
+database_id = "00000000-0000-0000-0000-000000000001"
+preview_database_id = "00000000-0000-0000-0000-000000000002"
+migrations_dir = "migrations"

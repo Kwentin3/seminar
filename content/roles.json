@@ -1,0 +1,164 @@
+[
+  {
+    "id": "hr",
+    "title": {
+      "ru": "HR",
+      "en": "HR"
+    },
+    "stories": [
+      {
+        "id": "story-1",
+        "problem": {
+          "ru": "Запросы сотрудников по адаптации приходили из почты, мессенджеров и личных чатов. SLA не контролировался, часть заявок терялась.",
+          "en": "Employee onboarding requests arrived through email, messengers, and private chats. SLA was not tracked and some requests were lost."
+        },
+        "solution": {
+          "ru": "Собрали карту потока, ввели единую intake-форму и классификацию запросов. Раз в неделю проводили разбор 20 случайных кейсов по чек-листу.",
+          "en": "We mapped the flow, introduced one intake form with request classification, and reviewed 20 random cases weekly against a checklist."
+        },
+        "result": {
+          "ru": "Медианное время первого ответа сократилось с 18 до 5 часов, доля потерянных заявок снизилась на 62% за 6 недель.",
+          "en": "Median first-response time dropped from 18 to 5 hours, and lost requests decreased by 62% in 6 weeks."
+        }
+      },
+      {
+        "id": "story-2",
+        "problem": {
+          "ru": "Новые HR-специалисты оценивали кандидатов по разным критериям, из-за чего решения команды были нестабильными.",
+          "en": "New HR specialists screened candidates using different criteria, making team decisions inconsistent."
+        },
+        "solution": {
+          "ru": "Ввели competency matrix, рубрикатор для скрининга и калибровочные сессии дважды в неделю.",
+          "en": "We introduced a competency matrix, a structured screening rubric, and twice-weekly calibration sessions."
+        },
+        "result": {
+          "ru": "Время вывода новичка на самостоятельную работу сократилось с 6 до 4 недель, повторные уточнения от кандидатов снизились на 33%.",
+          "en": "Time to independent work for new team members dropped from 6 to 4 weeks, and repeated candidate clarifications decreased by 33%."
+        }
+      },
+      {
+        "id": "story-3",
+        "problem": {
+          "ru": "Кандидаты часто отказывались после оффера из-за затянутой коммуникации между HR и hiring manager.",
+          "en": "Candidates often declined after offer because communication between HR and hiring managers was delayed."
+        },
+        "solution": {
+          "ru": "Зафиксировали SLA между этапами, сделали kanban узких мест и ежедневный 15-минутный sync по зависшим кейсам.",
+          "en": "We set stage-level SLAs, added a bottleneck-focused kanban board, and ran a daily 15-minute sync on stalled cases."
+        },
+        "result": {
+          "ru": "Доля отказов после оффера снизилась с 21% до 13%, средняя длительность цикла найма сократилась на 9 дней.",
+          "en": "Post-offer decline rate dropped from 21% to 13%, and average hiring cycle time became 9 days shorter."
+        }
+      }
+    ]
+  },
+  {
+    "id": "analyst",
+    "title": {
+      "ru": "Аналитика",
+      "en": "Analytics"
+    },
+    "stories": [
+      {
+        "id": "story-1",
+        "problem": {
+          "ru": "На встречах спорили о цифрах: у команд были разные определения ключевых метрик.",
+          "en": "Meetings were blocked by metric disputes because teams used different KPI definitions."
+        },
+        "solution": {
+          "ru": "Внедрили metric contract: владелец, формула, источник и периодичность обновления для каждой метрики.",
+          "en": "We introduced a metric contract: owner, formula, source, and refresh cadence for every KPI."
+        },
+        "result": {
+          "ru": "Количество конфликтов по определениям сократилось с 7 до 1 в месяц, время согласования отчета уменьшилось на 46%.",
+          "en": "Definition conflicts decreased from 7 to 1 per month, and report alignment time improved by 46%."
+        }
+      },
+      {
+        "id": "story-2",
+        "problem": {
+          "ru": "Ad-hoc запросы вытесняли плановые аналитические гипотезы, сроки постоянно сдвигались.",
+          "en": "Ad-hoc requests displaced planned analytics hypotheses and continuously shifted deadlines."
+        },
+        "solution": {
+          "ru": "Запустили intake-шаблон с обязательным бизнес-вопросом, добавили WIP-лимиты и еженедельный triage приоритетов.",
+          "en": "We launched an intake template with required business question, added WIP limits, and weekly priority triage."
+        },
+        "result": {
+          "ru": "Средний срок выполнения ad-hoc задач сократился с 11 до 6 рабочих дней, доля просрочек снизилась на 40%.",
+          "en": "Average ad-hoc turnaround dropped from 11 to 6 business days, and overdue work decreased by 40%."
+        }
+      },
+      {
+        "id": "story-3",
+        "problem": {
+          "ru": "После обновлений витрины критические дашборды периодически ломались, а инциденты обнаруживались слишком поздно.",
+          "en": "After data mart updates, critical dashboards occasionally broke and incidents were detected too late."
+        },
+        "solution": {
+          "ru": "Добавили pre-release checklist, smoke-набор ключевых KPI и журнал пост-инцидентных разборов с действиями.",
+          "en": "We added a pre-release checklist, a smoke set for key KPIs, and a post-incident log with assigned actions."
+        },
+        "result": {
+          "ru": "Число инцидентов P1/P2 по дашбордам снизилось с 5 до 2 за квартал, MTTR сократился с 9 до 3 часов.",
+          "en": "P1/P2 dashboard incidents dropped from 5 to 2 per quarter, and MTTR improved from 9 to 3 hours."
+        }
+      }
+    ]
+  },
+  {
+    "id": "manager",
+    "title": {
+      "ru": "Менеджмент",
+      "en": "Management"
+    },
+    "stories": [
+      {
+        "id": "story-1",
+        "problem": {
+          "ru": "Спринты срывались из-за скрытых межкомандных зависимостей; риски всплывали перед дедлайном.",
+          "en": "Sprints slipped due to hidden cross-team dependencies, with risks surfacing right before deadlines."
+        },
+        "solution": {
+          "ru": "Ввели dependency mapping на планировании и еженедельный risk review по шаблону severity/owner/date.",
+          "en": "We introduced dependency mapping in planning and weekly risk review using a severity/owner/date template."
+        },
+        "result": {
+          "ru": "Количество критических переносов сроков снизилось на 37% за два квартала.",
+          "en": "Critical deadline slips decreased by 37% over two quarters."
+        }
+      },
+      {
+        "id": "story-2",
+        "problem": {
+          "ru": "Статус-встречи занимали много времени, но редко приводили к зафиксированным решениям.",
+          "en": "Status meetings consumed time but rarely produced explicitly recorded decisions."
+        },
+        "solution": {
+          "ru": "Перешли на async-статус до встречи и decision log для созвона, где обсуждаются только решения и блокеры.",
+          "en": "We moved status updates async before meetings and used a decision log for calls focused on blockers and decisions."
+        },
+        "result": {
+          "ru": "Время менеджерских встреч сократилось на 31%, доля задач с назначенным owner после встречи выросла с 64% до 92%.",
+          "en": "Manager meeting time decreased by 31%, and tasks with an assigned owner after meeting increased from 64% to 92%."
+        }
+      },
+      {
+        "id": "story-3",
+        "problem": {
+          "ru": "Процессные изменения внедрялись неравномерно: одни команды адаптировались, другие откатывались к старым практикам.",
+          "en": "Process changes rolled out unevenly: some teams adopted them while others reverted to old practices."
+        },
+        "solution": {
+          "ru": "Использовали pilot-to-rollout подход, критерии готовности и двухнедельные ретроспективы adoption по командам.",
+          "en": "We used a pilot-to-rollout approach, readiness criteria, and biweekly adoption retrospectives by team."
+        },
+        "result": {
+          "ru": "Полное внедрение заняло 8 недель вместо 14, повторные откаты снизились на 55%.",
+          "en": "Full rollout took 8 weeks instead of 14, and repeated rollbacks decreased by 55%."
+        }
+      }
+    ]
+  }
+]
