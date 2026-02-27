@@ -1,0 +1,59 @@
+# GitHub Guardrails
+
+## CI Overview
+
+Workflow: `.github/workflows/ci.yml`
+
+Triggers:
+- `pull_request` (any branch)
+- `push` to `main`
+
+CI runs:
+1. `pnpm install --frozen-lockfile`
+2. `pnpm -r lint`
+3. `pnpm -r typecheck`
+4. `pnpm -r build`
+5. Smoke leads in mock mode:
+   - `pnpm run start:vps` (background)
+   - `pnpm run test:smoke:leads`
+
+Note:
+- Production runtime is VPS (`server/index.mjs` + `nginx` + `systemd`) and is deployed via runbook.
+
+## Branching Rules
+
+1. `main` is protected.
+2. No direct work on `main`.
+3. All changes go through `feature/*` branches + Pull Request.
+4. Merge only after green CI.
+
+## Required Checks
+
+PR is merge-ready only when CI is green:
+- lint
+- typecheck
+- build
+- smoke leads (mock)
+
+## Smoke Failure Triage
+
+Where to look:
+1. GitHub Actions -> failed run -> step `Smoke leads (mock mode)`.
+2. Read step output first (status/body from smoke script).
+3. Check dumped app log (`/tmp/seminar-app.log`) printed by workflow on failure.
+
+Common actions:
+1. Re-run failed jobs once (transient local runtime issue).
+2. If still failing, inspect app startup in logs (`/tmp/seminar-app.log` in workflow output).
+3. Validate local reproduction:
+   - `pnpm run start:vps`
+   - `pnpm run test:smoke:leads`
+
+## Secrets Rule
+
+1. Never commit real secrets to git.
+2. Commit only template files (`*.example`, e.g. `.dev.vars.example`, `.env.example`).
+3. Real secrets live only in:
+   - GitHub repository/environment secrets (if needed)
+   - VPS env file (`/etc/seminar/seminar.env`) for production
+4. If a real secret is committed by mistake: rotate immediately and remove from history.

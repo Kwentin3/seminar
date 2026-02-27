@@ -6,20 +6,39 @@ import { ROLE_CONTENT } from "../content/roles";
 
 type ContentState = "loading" | "error" | "empty" | "success";
 
-export function RoleTabs() {
+type RoleTabsProps = {
+  activeRoleId?: string | null;
+  onRoleChange?: (roleId: string) => void;
+};
+
+export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: RoleTabsProps) {
   const { locale, messages } = useAppContext();
-  const [activeRoleId, setActiveRoleId] = useState<string | null>(() => ROLE_CONTENT[0]?.id ?? null);
+  const [internalActiveRoleId, setInternalActiveRoleId] = useState<string | null>(
+    () => ROLE_CONTENT[0]?.id ?? null
+  );
+  const activeRoleId = externalActiveRoleId ?? internalActiveRoleId;
 
   useEffect(() => {
+    if (externalActiveRoleId !== undefined) {
+      return;
+    }
+
     if (!ROLE_CONTENT.length) {
-      setActiveRoleId(null);
+      setInternalActiveRoleId(null);
       return;
     }
 
     if (!activeRoleId || !ROLE_CONTENT.some((role) => role.id === activeRoleId)) {
-      setActiveRoleId(ROLE_CONTENT[0].id);
+      setInternalActiveRoleId(ROLE_CONTENT[0].id);
     }
-  }, [activeRoleId]);
+  }, [activeRoleId, externalActiveRoleId]);
+
+  const setActiveRoleId = (roleId: string) => {
+    if (externalActiveRoleId === undefined) {
+      setInternalActiveRoleId(roleId);
+    }
+    onRoleChange?.(roleId);
+  };
 
   const activeRole = useMemo(
     () => ROLE_CONTENT.find((role) => role.id === activeRoleId),

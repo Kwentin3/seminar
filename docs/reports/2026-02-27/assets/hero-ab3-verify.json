@@ -1,0 +1,117 @@
+{
+  "generatedAt": "2026-02-27T15:32:43.619Z",
+  "storageKey": "heroVariant",
+  "specGuard": {
+    "heroIsolated": true,
+    "rolesIsolated": true,
+    "heroSectionId": "hero",
+    "rolesSectionId": "roles"
+  },
+  "variantRenderChecks": {
+    "aggressive": {
+      "desktop": {
+        "heroHeightPx": 670,
+        "viewportHeightPx": 900,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": false,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      },
+      "mobile": {
+        "heroHeightPx": 730,
+        "viewportHeightPx": 844,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": true,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      }
+    },
+    "rational": {
+      "desktop": {
+        "heroHeightPx": 670,
+        "viewportHeightPx": 900,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": false,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      },
+      "mobile": {
+        "heroHeightPx": 730,
+        "viewportHeightPx": 844,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": true,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      }
+    },
+    "partner": {
+      "desktop": {
+        "heroHeightPx": 670,
+        "viewportHeightPx": 900,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": false,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      },
+      "mobile": {
+        "heroHeightPx": 730,
+        "viewportHeightPx": 844,
+        "heroFitsViewport": true,
+        "rolesStartBelowFold": true,
+        "headlineMatches": true,
+        "subheadlineMatches": true,
+        "fomoMatches": true,
+        "roleButtonsCount": 3,
+        "consoleErrors": []
+      }
+    }
+  },
+  "persistCheck": {
+    "firstLoadVariant": "partner",
+    "secondLoadVariant": "partner",
+    "stableAfterRefresh": true
+  },
+  "interactionChecks": {
+    "heroRoleClick": {
+      "pathChanged": false,
+      "hashChanged": false,
+      "activeTabChanged": true,
+      "scrollDelta": 781
+    },
+    "roleTabSwitchInline": {
+      "pathChanged": false,
+      "hashChanged": false,
+      "scrollDelta": 0,
+      "activeTabChanged": true
+    },
+    "consoleErrors": []
+  },
+  "eventChecks": {
+    "heroVariantAssignedLogged": true,
+    "roleClickedLogged": true,
+    "leadSubmittedLogged": true
+  },
+  "distributionSample": {
+    "sampleSize": 120,
+    "counts": {
+      "aggressive": 34,
+      "rational": 46,
+      "partner": 40
+    }
+  }
+}

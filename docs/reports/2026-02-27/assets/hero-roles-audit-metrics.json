@@ -1,0 +1,208 @@
+{
+  "desktop": {
+    "before": {
+      "location": {
+        "href": "http://127.0.0.1:8787/",
+        "pathname": "/",
+        "hash": ""
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "scrollY": 0
+      },
+      "blocks": {
+        "header": {
+          "top": 0,
+          "bottom": 81,
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "height": 81
+        },
+        "hero": {
+          "top": 113,
+          "bottom": 719,
+          "left": 224,
+          "right": 1216,
+          "width": 992,
+          "height": 606
+        },
+        "lead": {
+          "top": 743,
+          "bottom": 1019,
+          "left": 224,
+          "right": 1216,
+          "width": 992,
+          "height": 276
+        },
+        "tabList": {
+          "top": 206,
+          "bottom": 242,
+          "left": 249,
+          "right": 1191,
+          "width": 942,
+          "height": 36
+        },
+        "tabPanel": {
+          "top": 258,
+          "bottom": 694,
+          "left": 249,
+          "right": 1191,
+          "width": 942,
+          "height": 436
+        },
+        "firstCtaButton": {
+          "top": 930,
+          "bottom": 966,
+          "left": 249,
+          "right": 312.671875,
+          "width": 63.671875,
+          "height": 36
+        }
+      },
+      "counts": {
+        "roles": 3,
+        "storiesVisible": 3,
+        "headlineLines": 1,
+        "subheadlineLines": 1,
+        "roleWords": 163
+      },
+      "text": {
+        "heading": "Landing Foundation",
+        "subheading": "Content-driven landing: roles and user stories are rendered from JSON.",
+        "activeRoleId": "role-tab-hr",
+        "panelText": "User stories\n\nProblem: Employee onboarding requests arrived through email, messengers, and private chats. SLA was not tracked and some requests were lost.\n\nSolution: We mapped the flow, introduced one intake form with request classification, and reviewed 20 random cases weekly against a checklist.\n\nEffect: Median first-response time dropped from 18 to 5 hours, and lost requests decreased by 62% in 6 weeks.\n\nProblem: New HR specialists screened candidates using different criteria, making team decisions inconsistent.\n\nSolution: We introduced a competency matrix, a structured screening rubric, and twice-weekly calibration sessions.\n\nEffect: Time to independent work for new team members dropped from 6 to 4 weeks, and repeated candidate clarifications decreased by 33%.\n\nProblem: Candidates often declined after offer because communication between HR and hiring managers was delayed.\n\nSolution: We set stage-level SLAs, added a bottleneck-focused kanban board, and ran a daily 15-minute sync on stalled cases.\n\nEffect: Post-offer decline rate dropped from 21% to 13%, and average hiring cycle time became 9 days shorter."
+      },
+      "flags": {
+        "heroFitsViewport": true,
+        "roleButtonsVisibleNoScroll": true,
+        "leadVisibleNoScroll": true,
+        "headerStickyOrFixed": false,
+        "tabsStickyOrFixed": false,
+        "activeRoleVisible": true
+      }
+    },
+    "transition": {
+      "action": "inline_expand_or_replace",
+      "clickedTabId": "role-tab-analyst",
+      "locationChanged": false,
+      "hashChanged": false,
+      "pathChanged": false,
+      "scrollDelta": 0,
+      "scrollJump": false,
+      "modalOpened": false,
+      "inlineContentChanged": true,
+      "contextChange": false
+    },
+    "derived": {
+      "roleFlowHeight": 488,
+      "roleFlowScreens": 0.54,
+      "firstCtaOffsetFromRoleStart": 724,
+      "roleReadTimeSec": 49
+    }
+  },
+  "mobile": {
+    "before": {
+      "location": {
+        "href": "http://127.0.0.1:8787/",
+        "pathname": "/",
+        "hash": ""
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "scrollY": 0
+      },
+      "blocks": {
+        "header": {
+          "top": 0,
+          "bottom": 133,
+          "left": 0,
+          "right": 390,
+          "width": 390,
+          "height": 133
+        },
+        "hero": {
+          "top": 165,
+          "bottom": 1251,
+          "left": 16,
+          "right": 374,
+          "width": 358,
+          "height": 1086
+        },
+        "lead": {
+          "top": 1275,
+          "bottom": 1653,
+          "left": 16,
+          "right": 374,
+          "width": 358,
+          "height": 378
+        },
+        "tabList": {
+          "top": 278,
+          "bottom": 314,
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "height": 36
+        },
+        "tabPanel": {
+          "top": 330,
+          "bottom": 1226,
+          "left": 41,
+          "right": 349,
+          "width": 308,
+          "height": 896
+        },
+        "firstCtaButton": {
+          "top": 1564,
+          "bottom": 1600,
+          "left": 41,
+          "right": 104.671875,
+          "width": 63.671875,
+          "height": 36
+        }
+      },
+      "counts": {
+        "roles": 3,
+        "storiesVisible": 3,
+        "headlineLines": 1,
+        "subheadlineLines": 2,
+        "roleWords": 163
+      },
+      "text": {
+        "heading": "Landing Foundation",
+        "subheading": "Content-driven landing: roles and user stories are rendered from JSON.",
+        "activeRoleId": "role-tab-hr",
+        "panelText": "User stories\n\nProblem: Employee onboarding requests arrived through email, messengers, and private chats. SLA was not tracked and some requests were lost.\n\nSolution: We mapped the flow, introduced one intake form with request classification, and reviewed 20 random cases weekly against a checklist.\n\nEffect: Median first-response time dropped from 18 to 5 hours, and lost requests decreased by 62% in 6 weeks.\n\nProblem: New HR specialists screened candidates using different criteria, making team decisions inconsistent.\n\nSolution: We introduced a competency matrix, a structured screening rubric, and twice-weekly calibration sessions.\n\nEffect: Time to independent work for new team members dropped from 6 to 4 weeks, and repeated candidate clarifications decreased by 33%.\n\nProblem: Candidates often declined after offer because communication between HR and hiring managers was delayed.\n\nSolution: We set stage-level SLAs, added a bottleneck-focused kanban board, and ran a daily 15-minute sync on stalled cases.\n\nEffect: Post-offer decline rate dropped from 21% to 13%, and average hiring cycle time became 9 days shorter."
+      },
+      "flags": {
+        "heroFitsViewport": false,
+        "roleButtonsVisibleNoScroll": true,
+        "leadVisibleNoScroll": false,
+        "headerStickyOrFixed": false,
+        "tabsStickyOrFixed": false,
+        "activeRoleVisible": true
+      }
+    },
+    "transition": {
+      "action": "inline_expand_or_replace",
+      "clickedTabId": "role-tab-analyst",
+      "locationChanged": false,
+      "hashChanged": false,
+      "pathChanged": false,
+      "scrollDelta": 0,
+      "scrollJump": false,
+      "modalOpened": false,
+      "inlineContentChanged": true,
+      "contextChange": false
+    },
+    "derived": {
+      "roleFlowHeight": 948,
+      "roleFlowScreens": 1.12,
+      "firstCtaOffsetFromRoleStart": 1286,
+      "roleReadTimeSec": 49
+    }
+  }
+}

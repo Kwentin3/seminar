@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
-const BASE_URL = process.env.LEADS_BASE_URL ?? "http://127.0.0.1:8788";
-const D1_DATABASE = process.env.D1_DATABASE_NAME ?? "seminar-leads";
+const BASE_URL = process.env.LEADS_BASE_URL ?? "http://127.0.0.1:8787";
+const DATABASE_PATH = process.env.DATABASE_PATH ?? resolve(process.cwd(), "data", "seminar.sqlite");
 const SERVER_READY_TIMEOUT_MS = 10_000;
 const SERVER_READY_INTERVAL_MS = 500;
 
@@ -24,6 +25,7 @@ async function run() {
   };
 
   const happyResult = await postLead(happyPayload, {
+    "X-Forwarded-For": happyIp,
     "CF-Connecting-IP": happyIp
   });
   assertNoServerError(happyResult, "happy-path");
@@ -36,13 +38,14 @@ async function run() {
     throw new Error(`Unexpected happy-path response body: ${happyResult.rawBody}`);
   }
 
-  assertLeadExistsInLocalD1(happyBody.lead_id);
+  assertLeadExistsInLocalSqlite(happyBody.lead_id);
 
   const duplicatePayload = {
     ...happyPayload,
     source: `${source}-duplicate`
   };
   const duplicateResult = await postLead(duplicatePayload, {
+    "X-Forwarded-For": happyIp,
     "CF-Connecting-IP": happyIp
   });
   assertNoServerError(duplicateResult, "duplicate-path");
@@ -54,8 +57,10 @@ async function run() {
     phone: phoneFactory(),
     turnstile_token: "dev-fail"
   };
+  const failIp = randomTestIp();
   const failResult = await postLead(failPayload, {
-    "CF-Connecting-IP": randomTestIp()
+    "X-Forwarded-For": failIp,
+    "CF-Connecting-IP": failIp
   });
   assertNoServerError(failResult, "turnstile-fail-path");
   if (failResult.status < 400 || failResult.status >= 500) {
@@ -76,6 +81,7 @@ async function run() {
       turnstile_token: "dev-ok"
     };
     const rateResult = await postLead(ratePayload, {
+      "X-Forwarded-For": rateIp,
       "CF-Connecting-IP": rateIp
     });
     assertNoServerError(rateResult, `rate-path-${i + 1}`);
@@ -94,6 +100,7 @@ async function run() {
     turnstile_token: "dev-ok"
   };
   const rateLimitedResult = await postLead(rateLimitedPayload, {
+    "X-Forwarded-For": rateIp,
     "CF-Connecting-IP": rateIp
   });
   assertNoServerError(rateLimitedResult, "rate-limited-path");
@@ -123,7 +130,7 @@ async function assertDevServerIsReachable() {
     await sleep(SERVER_READY_INTERVAL_MS);
   }
 
-  throw new Error(`Pages dev is not reachable at ${BASE_URL} within ${SERVER_READY_TIMEOUT_MS}ms (${lastError}).`);
+  throw new Error(`Server is not reachable at ${BASE_URL} within ${SERVER_READY_TIMEOUT_MS}ms (${lastError}).`);
 }
 
 async function postLead(payload, headers = {}) {
@@ -170,54 +177,26 @@ function isApiErrorWithCode(payload, expectedCode) {
   );
 }
 
-function assertLeadExistsInLocalD1(leadId) {
-  const safeLeadId = escapeSqlLiteral(leadId);
-  const count = queryCount(`SELECT COUNT(*) AS c FROM leads WHERE id='${safeLeadId}'`);
-  if (count !== 1) {
-    throw new Error(`Lead id ${leadId} was not found in local D1 (count=${count}).`);
-  }
-}
-
-function queryCount(query) {
-  const result = runWranglerD1Query(query);
-  const count = extractCountFromD1Result(result.json);
-  if (count === null) {
-    throw new Error(`Unexpected D1 query output: ${result.raw}`);
-  }
-
-  return count;
-}
-
-function runWranglerD1Query(query) {
-  const pnpmExecPath = process.env.npm_execpath;
-  if (!pnpmExecPath) {
-    throw new Error("npm_execpath is not set; cannot run wrangler through pnpm.");
-  }
-
-  const result = spawnSync(
-    process.execPath,
-    [pnpmExecPath, "exec", "wrangler", "d1", "execute", D1_DATABASE, "--local", "--command", query, "--json"],
-    {
-      encoding: "utf8",
-      env: process.env
+function assertLeadExistsInLocalSqlite(leadId) {
+  const database = new DatabaseSync(DATABASE_PATH);
+  let count = null;
+  try {
+    const row = database.prepare("SELECT COUNT(*) AS c FROM leads WHERE id = ?").get(leadId);
+    if (typeof row?.c === "number") {
+      count = row.c;
+    } else if (typeof row?.c === "bigint") {
+      count = Number(row.c);
+    } else if (typeof row?.c === "string") {
+      const parsed = Number(row.c);
+      count = Number.isFinite(parsed) ? parsed : null;
     }
-  );
-
-  if (result.error) {
-    throw new Error(`Failed to start wrangler process: ${result.error.message}`);
+  } finally {
+    database.close();
   }
 
-  if (result.status !== 0) {
-    throw new Error(
-      `Failed to query local D1.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
-    );
+  if (count !== 1) {
+    throw new Error(`Lead id ${leadId} was not found in local SQLite (${DATABASE_PATH}) (count=${count}).`);
   }
-
-  const parsed = parseWranglerJsonOutput(result.stdout);
-  return {
-    json: parsed,
-    raw: result.stdout
-  };
 }
 
 function safeJsonParse(raw) {
@@ -228,42 +207,6 @@ function safeJsonParse(raw) {
   }
 }
 
-function parseWranglerJsonOutput(raw) {
-  const direct = safeJsonParse(raw.trim());
-  if (direct !== null) {
-    return direct;
-  }
-
-  const match = raw.match(/(\[\s*\{[\s\S]*\}\s*\])\s*$/);
-  if (!match) {
-    return null;
-  }
-
-  return safeJsonParse(match[1]);
-}
-
-function extractCountFromD1Result(payload) {
-  if (!Array.isArray(payload) || payload.length === 0) {
-    return null;
-  }
-
-  const first = payload[0];
-  if (!first || !Array.isArray(first.results) || first.results.length === 0) {
-    return null;
-  }
-
-  const rawCount = first.results[0]?.c;
-  if (typeof rawCount === "number") {
-    return rawCount;
-  }
-
-  if (typeof rawCount === "string") {
-    const parsed = Number(rawCount);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
 
 function isSuccessLeadResponse(payload) {
   return Boolean(
@@ -284,10 +227,6 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function escapeSqlLiteral(value) {
-  return value.replaceAll("'", "''");
 }
 
 let ipCursor = Number(Date.now() % 200);

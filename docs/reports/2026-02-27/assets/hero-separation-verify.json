@@ -1,0 +1,176 @@
+{
+  "desktop": {
+    "before": {
+      "location": {
+        "href": "http://127.0.0.1:8787/",
+        "pathname": "/",
+        "hash": ""
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "scrollY": 0
+      },
+      "blocks": {
+        "hero": {
+          "top": 113,
+          "bottom": 783,
+          "height": 670,
+          "width": 992
+        },
+        "roles": {
+          "top": 807,
+          "bottom": 1389,
+          "height": 582,
+          "width": 992
+        },
+        "tabList": {
+          "top": 876,
+          "bottom": 912,
+          "height": 36,
+          "width": 942
+        }
+      },
+      "buttons": {
+        "count": 3,
+        "labels": [
+          "HR",
+          "Analytics",
+          "Management"
+        ],
+        "rects": [
+          {
+            "top": 722,
+            "bottom": 758,
+            "height": 36,
+            "width": 43.015625
+          },
+          {
+            "top": 722,
+            "bottom": 758,
+            "height": 36,
+            "width": 81.03125
+          },
+          {
+            "top": 722,
+            "bottom": 758,
+            "height": 36,
+            "width": 108.671875
+          }
+        ]
+      },
+      "activeTabId": "role-tab-hr",
+      "checks": {
+        "heroWithinViewportByHeight": true,
+        "rolesStartBelowFold": false,
+        "allHeroRoleButtonsVisibleNoScroll": true
+      }
+    },
+    "interactions": {
+      "heroClick": {
+        "clickedLabel": "Analytics",
+        "pathChanged": false,
+        "hashChanged": false,
+        "scrollDelta": 781,
+        "activeTabChanged": true,
+        "activeTabAfter": "role-tab-analyst",
+        "rolesTopAfterClick": 26
+      },
+      "tabSwitch": {
+        "pathChanged": false,
+        "hashChanged": false,
+        "scrollDelta": 0,
+        "activeTabChanged": true,
+        "activeTabAfter": "role-tab-hr"
+      }
+    },
+    "consoleErrors": []
+  },
+  "mobile": {
+    "before": {
+      "location": {
+        "href": "http://127.0.0.1:8787/",
+        "pathname": "/",
+        "hash": ""
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "scrollY": 0
+      },
+      "blocks": {
+        "hero": {
+          "top": 165,
+          "bottom": 895,
+          "height": 730,
+          "width": 358
+        },
+        "roles": {
+          "top": 919,
+          "bottom": 1961,
+          "height": 1042,
+          "width": 358
+        },
+        "tabList": {
+          "top": 988,
+          "bottom": 1024,
+          "height": 36,
+          "width": 308
+        }
+      },
+      "buttons": {
+        "count": 3,
+        "labels": [
+          "HR",
+          "Analytics",
+          "Management"
+        ],
+        "rects": [
+          {
+            "top": 834,
+            "bottom": 870,
+            "height": 36,
+            "width": 43.015625
+          },
+          {
+            "top": 834,
+            "bottom": 870,
+            "height": 36,
+            "width": 81.03125
+          },
+          {
+            "top": 834,
+            "bottom": 870,
+            "height": 36,
+            "width": 108.671875
+          }
+        ]
+      },
+      "activeTabId": "role-tab-hr",
+      "checks": {
+        "heroWithinViewportByHeight": true,
+        "rolesStartBelowFold": true,
+        "allHeroRoleButtonsVisibleNoScroll": false
+      }
+    },
+    "interactions": {
+      "heroClick": {
+        "clickedLabel": "Analytics",
+        "pathChanged": false,
+        "hashChanged": false,
+        "scrollDelta": 868,
+        "activeTabChanged": true,
+        "activeTabAfter": "role-tab-analyst",
+        "rolesTopAfterClick": 0
+      },
+      "tabSwitch": {
+        "pathChanged": false,
+        "hashChanged": false,
+        "scrollDelta": 0,
+        "activeTabChanged": true,
+        "activeTabAfter": "role-tab-hr"
+      }
+    },
+    "consoleErrors": []
+  }
+}

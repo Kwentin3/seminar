@@ -13,6 +13,7 @@ const COUNTRY_OPTIONS: CountryOption[] = ["RU", "US", "KZ", "DE", "GB", "FR"];
 export function LeadForm() {
   const { locale, messages } = useAppContext();
   const siteKey = import.meta.env.TURNSTILE_SITE_KEY;
+  const isTurnstileEnabled = Boolean(siteKey);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -23,12 +24,8 @@ export function LeadForm() {
   const [countryRequired, setCountryRequired] = useState(false);
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
-  const submitDisabled = status === "loading" || !siteKey;
+  const submitDisabled = status === "loading";
   const statusMessage = useMemo(() => {
-    if (!siteKey) {
-      return messages.landing.leadForm.errors.siteKeyMissing;
-    }
-
     if (status === "success") {
       return messages.landing.leadForm.success;
     }
@@ -54,16 +51,10 @@ export function LeadForm() {
     }
 
     return messages.landing.leadForm.errors.generic;
-  }, [errorCode, messages.landing.leadForm, siteKey, status]);
+  }, [errorCode, messages.landing.leadForm, status]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (!siteKey) {
-      setStatus("error");
-      setErrorCode("internal_error");
-      return;
-    }
 
     if (!name.trim() || !phone.trim()) {
       setStatus("error");
@@ -77,7 +68,7 @@ export function LeadForm() {
       return;
     }
 
-    if (!token) {
+    if (isTurnstileEnabled && !token) {
       setStatus("error");
       setErrorCode("turnstile_failed");
       return;
@@ -91,7 +82,7 @@ export function LeadForm() {
       phone: phone.trim(),
       locale,
       source: "landing",
-      turnstile_token: token,
+      turnstile_token: isTurnstileEnabled ? token : "captcha-disabled",
       ...(country ? { country } : {})
     };
 
@@ -185,9 +176,9 @@ export function LeadForm() {
         </label>
       ) : null}
 
-      {siteKey ? (
+      {isTurnstileEnabled ? (
         <TurnstileWidget
-          siteKey={siteKey}
+          siteKey={siteKey ?? ""}
           locale={locale}
           resetKey={turnstileResetKey}
           onTokenChange={setToken}

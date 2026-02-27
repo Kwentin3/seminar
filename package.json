@@ -17,10 +17,12 @@
     "d1:migrate:preview": "wrangler d1 migrations apply seminar-leads --remote --preview",
     "d1:migrate:remote": "wrangler d1 migrations apply seminar-leads --remote",
     "d1:migrate:production": "wrangler d1 migrations apply seminar-leads --remote",
-    "test:smoke:leads": "node scripts/test-smoke-leads.mjs"
+    "test:smoke:leads": "node scripts/test-smoke-leads.mjs",
+    "start:vps": "node server/index.mjs"
   },
   "dependencies": {
     "@seminar/contracts": "workspace:*",
+    "express": "^4.21.2",
     "libphonenumber-js": "^1.12.28"
   },
   "devDependencies": {

@@ -11,9 +11,25 @@ type HeaderMessages = {
   themeDark: string;
 };
 
+type HeroVariantCopyMessages = {
+  headline: string;
+  subheadline: string;
+  fomo: string;
+};
+
+type HeroVariantsMessages = {
+  aggressive: HeroVariantCopyMessages;
+  rational: HeroVariantCopyMessages;
+  partner: HeroVariantCopyMessages;
+};
+
 type LandingMessages = {
   heading: string;
   summary: string;
+  heroFomoLine: string;
+  hero: {
+    variant: HeroVariantsMessages;
+  };
   tabsLabel: string;
   storiesTitle: string;
   storyFields: {
@@ -107,6 +123,26 @@ export const MESSAGES: Record<Locale, AppMessages> = {
     landing: {
       heading: "Landing Foundation",
       summary: "Контентный лендинг: роли и user stories полностью рендерятся из JSON.",
+      heroFomoLine: "Каждая роль получает реальные кейсы с измеримым эффектом без смены контекста страницы.",
+      hero: {
+        variant: {
+          aggressive: {
+            headline: "ИИ уже встроен в процессы ваших конкурентов.",
+            subheadline: "Они ускоряются каждый день. Разрыв в скорости и маржинальности растёт.",
+            fomo: "Догонять всегда дороже, чем внедрять первыми."
+          },
+          rational: {
+            headline: "Где ИИ даёт измеримый эффект в вашем бизнесе?",
+            subheadline: "Сокращение времени, рост конверсии, стандартизация процессов.",
+            fomo: "Без системного внедрения эффект остаётся случайным."
+          },
+          partner: {
+            headline: "Мы работаем внутри процессов, а не рассказываем про ИИ.",
+            subheadline: "Продажи, операции, IT — реальные сценарии, реальные цифры.",
+            fomo: "ИИ становится инфраструктурой. Вопрос — управляемой или хаотичной."
+          }
+        }
+      },
       tabsLabel: "Роли",
       storiesTitle: "User stories",
       storyFields: {
@@ -192,6 +228,26 @@ export const MESSAGES: Record<Locale, AppMessages> = {
     landing: {
       heading: "Landing Foundation",
       summary: "Content-driven landing: roles and user stories are rendered from JSON.",
+      heroFomoLine: "Each role gets measurable real-world cases without leaving the current page context.",
+      hero: {
+        variant: {
+          aggressive: {
+            headline: "ИИ уже встроен в процессы ваших конкурентов.",
+            subheadline: "Они ускоряются каждый день. Разрыв в скорости и маржинальности растёт.",
+            fomo: "Догонять всегда дороже, чем внедрять первыми."
+          },
+          rational: {
+            headline: "Где ИИ даёт измеримый эффект в вашем бизнесе?",
+            subheadline: "Сокращение времени, рост конверсии, стандартизация процессов.",
+            fomo: "Без системного внедрения эффект остаётся случайным."
+          },
+          partner: {
+            headline: "Мы работаем внутри процессов, а не рассказываем про ИИ.",
+            subheadline: "Продажи, операции, IT — реальные сценарии, реальные цифры.",
+            fomo: "ИИ становится инфраструктурой. Вопрос — управляемой или хаотичной."
+          }
+        }
+      },
       tabsLabel: "Roles",
       storiesTitle: "User stories",
       storyFields: {

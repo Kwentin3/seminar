@@ -5,7 +5,6 @@ pages_build_output_dir = "apps/web/dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "seminar-leads"
-# Replace before go-live with real Cloudflare D1 IDs.
-database_id = "00000000-0000-0000-0000-000000000001"
-preview_database_id = "00000000-0000-0000-0000-000000000002"
+database_id = "1aebef71-1a70-4a3f-8714-aa1fe9091168"
+preview_database_id = "49a55d3c-96d7-47f3-bacb-af6abec37fa1"
 migrations_dir = "migrations"
