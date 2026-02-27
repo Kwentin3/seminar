@@ -33,7 +33,7 @@ jobs:
         run: pnpm -r lint
 
       - name: Typecheck
-        run: pnpm -r typecheck
+        run: pnpm run typecheck
 
       - name: Build
         run: pnpm -r build
