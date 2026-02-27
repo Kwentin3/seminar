@@ -3,6 +3,8 @@
 ## Current Runtime Snapshot
 
 - Production hosting: JustHost VPS (`91.132.48.224`)
+- Trusted public domain (canonical): `https://seminar-ai.ru/`
+- SSH operations policy (updated `2026-02-27`): key-based root access only for deployment tasks
 - App runtime: Node.js service (`server/index.mjs`) managed by `systemd`
 - Edge/web: `nginx` reverse proxy
 - Storage: SQLite (`/var/lib/seminar/seminar.sqlite` in production)

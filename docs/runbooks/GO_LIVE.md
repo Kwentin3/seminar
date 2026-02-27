@@ -12,6 +12,7 @@ Repeatable production deployment checklist for `seminar` on a single VPS runtime
 ## Current Production Baseline
 
 - Runtime host: JustHost VPS (`91.132.48.224`)
+- SSH access policy (updated `2026-02-27`): root login via SSH key only (`PasswordAuthentication` is disabled for operational access).
 - OS: Debian 11
 - App path:
   - releases: `/var/www/seminar/releases/<timestamp>`
@@ -22,13 +23,18 @@ Repeatable production deployment checklist for `seminar` on a single VPS runtime
 
 ## Prerequisites
 
-1. Root SSH access to VPS.
+1. Root SSH key-based access to VPS (password login is not used for deployment operations).
 2. DNS control for:
    - `seminar-ai.ru`
-   - `www.seminar-ai.ru`
-   - `ai-work.pro`
-   - `www.ai-work.pro`
 3. Local machine with `pnpm`, `node`, and SSH/SCP client.
+
+### SSH Access Check (Current)
+
+Use this command to verify key-based access:
+
+```bash
+ssh -o BatchMode=yes root@91.132.48.224 "echo ok && whoami"
+```
 
 ## A) One-Time Server Bootstrap
 
@@ -150,7 +156,7 @@ systemctl restart seminar
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name seminar-ai.ru www.seminar-ai.ru ai-work.pro www.ai-work.pro _;
+    server_name seminar-ai.ru _;
 
     client_max_body_size 2m;
 
@@ -224,11 +230,8 @@ fail2ban-client status
 
 ## G) DNS and TLS
 
-Before certificate issuance, these A records must resolve to `91.132.48.224`:
+Before certificate issuance, this A record must resolve to `91.132.48.224`:
 - `seminar-ai.ru`
-- `www.seminar-ai.ru`
-- `ai-work.pro`
-- `www.ai-work.pro`
 
 Remove stale `AAAA` records if they point elsewhere.
 
@@ -236,7 +239,7 @@ Issue and install certificates:
 
 ```bash
 certbot --nginx --non-interactive --agree-tos -m kwentin3@mail.ru --redirect \
-  -d seminar-ai.ru -d www.seminar-ai.ru -d ai-work.pro -d www.ai-work.pro
+  -d seminar-ai.ru
 ```
 
 Verify:

@@ -4,6 +4,7 @@ Landing + lead capture + minimal admin panel.
 
 Current production runtime:
 - JustHost VPS
+- Trusted public domain (canonical): https://seminar-ai.ru/
 - Node.js service (`server/index.mjs`) under `systemd`
 - `nginx` reverse proxy
 - SQLite storage

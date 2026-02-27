@@ -19,6 +19,7 @@ CI runs:
 
 Note:
 - Production runtime is VPS (`server/index.mjs` + `nginx` + `systemd`) and is deployed via runbook.
+- Trusted public domain for this project is only `https://seminar-ai.ru/`.
 
 ## Branching Rules
 

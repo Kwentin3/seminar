@@ -25,6 +25,7 @@ CI runs:
 
 Note:
 - Production runtime is VPS (`server/index.mjs` + `nginx` + `systemd`) and is deployed via runbook.
+- Trusted public domain for this project is only `https://seminar-ai.ru/`.
 
 ## Required Secrets/Variables For Deploy
 
@@ -36,6 +37,10 @@ Repository secrets:
 
 Repository variables:
 1. `VPS_SSH_PORT` - SSH port (default `22` if omitted).
+
+Current operational policy (updated `2026-02-27`):
+- Deploy access is key-based only.
+- Root password authentication is not part of deploy flow.
 
 ## Branching Rules
 

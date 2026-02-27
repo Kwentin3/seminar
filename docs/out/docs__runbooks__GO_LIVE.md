@@ -25,9 +25,6 @@ Repeatable production deployment checklist for `seminar` on a single VPS runtime
 1. Root SSH access to VPS.
 2. DNS control for:
    - `seminar-ai.ru`
-   - `www.seminar-ai.ru`
-   - `ai-work.pro`
-   - `www.ai-work.pro`
 3. Local machine with `pnpm`, `node`, and SSH/SCP client.
 
 ## A) One-Time Server Bootstrap
@@ -150,7 +147,7 @@ systemctl restart seminar
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name seminar-ai.ru www.seminar-ai.ru ai-work.pro www.ai-work.pro _;
+    server_name seminar-ai.ru _;
 
     client_max_body_size 2m;
 
@@ -224,11 +221,8 @@ fail2ban-client status
 
 ## G) DNS and TLS
 
-Before certificate issuance, these A records must resolve to `91.132.48.224`:
+Before certificate issuance, this A record must resolve to `91.132.48.224`:
 - `seminar-ai.ru`
-- `www.seminar-ai.ru`
-- `ai-work.pro`
-- `www.ai-work.pro`
 
 Remove stale `AAAA` records if they point elsewhere.
 
@@ -236,7 +230,7 @@ Issue and install certificates:
 
 ```bash
 certbot --nginx --non-interactive --agree-tos -m kwentin3@mail.ru --redirect \
-  -d seminar-ai.ru -d www.seminar-ai.ru -d ai-work.pro -d www.ai-work.pro
+  -d seminar-ai.ru
 ```
 
 Verify:
