@@ -137,10 +137,12 @@ Regex:
 Нормативные поля:
 1. `module` обязан быть `landing.step1.hero`.
 2. `anchors` обязан быть объектом разрешенных target-ов.
-3. `experiment` обязателен.
-4. `variants` обязан содержать контент для `aggressive`, `rational`, `partner`.
-5. Канонический идентификатор варианта задается ключом в объекте `variants` (`aggressive`, `rational`, `partner`).
-6. Поле `id` на уровне варианта (`variants.<name>.id`) в v1.0 запрещено.
+3. В v1.0 единственный нормативно обязательный anchor-target: `#roles`.
+4. Дополнительные anchors (включая `#lead-form`) допустимы, но не обязательны.
+5. `experiment` обязателен.
+6. `variants` обязан содержать контент для `aggressive`, `rational`, `partner`.
+7. Канонический идентификатор варианта задается ключом в объекте `variants` (`aggressive`, `rational`, `partner`).
+8. Поле `id` на уровне варианта (`variants.<name>.id`) в v1.0 запрещено.
 
 ### 5.1 Experiment
 `experiment` содержит:
