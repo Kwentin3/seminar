@@ -3,7 +3,8 @@ import {
   validateLandingContentRuntime,
   validateLandingContentStrict,
   type ContentValidationError,
-  type LandingValidationInput
+  type LandingValidationInput,
+  type RuntimeClassifiedError
 } from "@seminar/contracts";
 import manifestJson from "@content/landing/manifest.v1.json";
 import step1HeroJson from "@content/landing/step1.hero.v1.json";
@@ -21,16 +22,21 @@ function formatError(error: ContentValidationError): string {
   return `${error.file} ${error.json_pointer} ${error.error_code}`;
 }
 
-function logErrors(errors: ContentValidationError[]) {
-  for (const error of errors) {
-    console.error("content_validation_error", error);
+function logErrors(errors: ContentValidationError[], runtimeErrors: RuntimeClassifiedError[]) {
+  for (let index = 0; index < errors.length; index += 1) {
+    const error = errors[index];
+    const runtime = runtimeErrors[index];
+    console.error("content_validation_error", {
+      ...error,
+      level: runtime?.level ?? "structural"
+    });
   }
 }
 
 const strictValidation = validateLandingContentStrict(input);
 
 if (import.meta.env.DEV && strictValidation.errors.length > 0) {
-  logErrors(strictValidation.errors);
+  logErrors(strictValidation.errors, strictValidation.runtime_errors);
   throw new Error(
     [
       "Landing content validation failed.",
@@ -44,7 +50,7 @@ const runtimeValidation = import.meta.env.DEV
   : validateLandingContentRuntime(input);
 
 if (runtimeValidation.errors.length > 0) {
-  logErrors(runtimeValidation.errors);
+  logErrors(runtimeValidation.errors, runtimeValidation.runtime_errors);
 }
 
 export const LANDING_CONTENT = runtimeValidation;

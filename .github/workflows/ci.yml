@@ -43,6 +43,9 @@ jobs:
       - name: Validate landing content
         run: pnpm run validate:content
 
+      - name: Test landing content validator
+        run: pnpm run test:content:validator
+
       - name: Build
         run: pnpm -r build
 

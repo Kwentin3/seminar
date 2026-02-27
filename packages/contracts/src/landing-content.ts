@@ -118,9 +118,17 @@ export type LandingValidationInput = {
 
 export type LandingValidationResult = {
   errors: ContentValidationError[];
+  runtime_errors: RuntimeClassifiedError[];
   manifest: LandingManifest | null;
   step1: Step1HeroModule | null;
   step2: Step2RolesModule | null;
+};
+
+export type RuntimeDegradationLevel = "leaf" | "variant" | "structural";
+
+export type RuntimeClassifiedError = ContentValidationError & {
+  level: RuntimeDegradationLevel;
+  module: "landing.manifest" | LandingModuleName | "unknown";
 };
 
 const semverRegex = /^\d+\.\d+\.\d+$/;
@@ -1009,8 +1017,11 @@ function validateLandingContent(input: LandingValidationInput): LandingValidatio
     }
   }
 
+  const runtimeErrors = errors.map((error) => classifyRuntimeError(error));
+
   return {
     errors,
+    runtime_errors: runtimeErrors,
     manifest,
     step1,
     step2
@@ -1023,4 +1034,54 @@ export function validateLandingContentStrict(input: LandingValidationInput): Lan
 
 export function validateLandingContentRuntime(input: LandingValidationInput): LandingValidationResult {
   return validateLandingContent(input);
+}
+
+function classifyRuntimeError(error: ContentValidationError): RuntimeClassifiedError {
+  const module = moduleForFile(error.file);
+  const pointer = error.json_pointer;
+
+  if (module === "landing.step1.hero") {
+    if (/^\/variants\/[^/]+\/(body|badges|cta)\/\d+\//.test(pointer)) {
+      return { ...error, module, level: "leaf" };
+    }
+    if (/^\/variants\/[^/]+\/(body|badges|cta)$/.test(pointer)) {
+      return { ...error, module, level: "variant" };
+    }
+    if (
+      pointer.startsWith("/experiment") ||
+      pointer.startsWith("/variants/") ||
+      pointer === "/variants"
+    ) {
+      return { ...error, module, level: "variant" };
+    }
+    return { ...error, module, level: "structural" };
+  }
+
+  if (module === "landing.step2.roles") {
+    if (/^\/roles\/[^/]+\/stories\/\d+\//.test(pointer)) {
+      return { ...error, module, level: "leaf" };
+    }
+    return { ...error, module, level: "structural" };
+  }
+
+  return {
+    ...error,
+    module,
+    level: "structural"
+  };
+}
+
+function moduleForFile(file: string): "landing.manifest" | LandingModuleName | "unknown" {
+  if (file === landingContentFiles.manifest) {
+    return "landing.manifest";
+  }
+  for (const [moduleName, modulePath] of Object.entries(landingContentFiles.modules) as [
+    LandingModuleName,
+    string
+  ][]) {
+    if (file === modulePath) {
+      return moduleName;
+    }
+  }
+  return "unknown";
 }
