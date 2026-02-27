@@ -33,7 +33,12 @@ jobs:
         run: pnpm -r lint
 
       - name: Typecheck
-        run: pnpm run typecheck
+        run: |
+          pnpm --filter @seminar/contracts run typecheck
+          pnpm --filter @seminar/utils run build
+          pnpm --filter @seminar/ui run typecheck
+          pnpm --filter @seminar/web run typecheck
+          pnpm run typecheck:functions
 
       - name: Build
         run: pnpm -r build
