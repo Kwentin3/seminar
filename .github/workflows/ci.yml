@@ -34,9 +34,9 @@ jobs:
 
       - name: Typecheck
         run: |
-          pnpm --filter @seminar/contracts run typecheck
+          pnpm --filter @seminar/contracts run build
           pnpm --filter @seminar/utils run build
-          pnpm --filter @seminar/ui run typecheck
+          pnpm --filter @seminar/ui run build
           pnpm --filter @seminar/web run typecheck
           pnpm run typecheck:functions
 
