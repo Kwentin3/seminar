@@ -80,3 +80,87 @@ jobs:
             cat /tmp/seminar-app.log
             exit 1
           fi
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 30
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      SSH_HOST: ${{ secrets.VPS_HOST }}
+      SSH_USER: ${{ secrets.VPS_SSH_USER }}
+      SSH_PORT: ${{ vars.VPS_SSH_PORT || '22' }}
+      SSH_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Prepare deployment archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='**/node_modules' \
+            --exclude='data/seminar.sqlite' \
+            --exclude='data/seminar.sqlite-shm' \
+            --exclude='data/seminar.sqlite-wal' \
+            -czf /tmp/seminar-deploy.tgz .
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/id_ed25519 -P "$SSH_PORT" /tmp/seminar-deploy.tgz "$SSH_USER@$SSH_HOST:/tmp/seminar-deploy.tgz"
+
+      - name: Deploy on VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 'bash -se' <<'EOF'
+          set -euo pipefail
+
+          RELEASE_DIR="/var/www/seminar/releases/$(date +%Y%m%d%H%M%S)"
+          mkdir -p "$RELEASE_DIR"
+          tar -xzf /tmp/seminar-deploy.tgz -C "$RELEASE_DIR"
+
+          cd "$RELEASE_DIR"
+          pnpm install --frozen-lockfile
+          pnpm run build:web
+
+          chown -R seminar:seminar "$RELEASE_DIR"
+          ln -sfn "$RELEASE_DIR" /var/www/seminar/current
+          chown -h seminar:seminar /var/www/seminar/current
+
+          systemctl restart seminar
+          systemctl is-active --quiet seminar
+
+          curl -fsS http://127.0.0.1:8787/ >/dev/null
+          curl -fsS http://127.0.0.1:8787/api/healthz >/dev/null
+
+          echo "Deployed release: $RELEASE_DIR"
+          EOF

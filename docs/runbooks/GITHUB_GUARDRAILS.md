@@ -16,9 +16,26 @@ CI runs:
 5. Smoke leads in mock mode:
    - `pnpm run start:vps` (background)
    - `pnpm run test:smoke:leads`
+6. Deploy to VPS (only on `push` to `main`, after green CI):
+   - upload release archive via SSH key
+   - build on VPS
+   - switch `/var/www/seminar/current` symlink
+   - restart `seminar.service`
+   - smoke `http://127.0.0.1:8787/` and `/api/healthz`
 
 Note:
 - Production runtime is VPS (`server/index.mjs` + `nginx` + `systemd`) and is deployed via runbook.
+
+## Required Secrets/Variables For Deploy
+
+Repository secrets:
+1. `VPS_HOST` - VPS IP/FQDN.
+2. `VPS_SSH_USER` - SSH user for deploy (recommended dedicated deploy user).
+3. `VPS_SSH_PRIVATE_KEY` - private key (PEM/OpenSSH) matching authorized key on VPS.
+4. `VPS_KNOWN_HOSTS` - known_hosts line for VPS host key.
+
+Repository variables:
+1. `VPS_SSH_PORT` - SSH port (default `22` if omitted).
 
 ## Branching Rules
 
