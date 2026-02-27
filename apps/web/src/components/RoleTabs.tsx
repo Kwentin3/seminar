@@ -1,20 +1,28 @@
-import type { Locale, RoleContent } from "@seminar/contracts";
+import type { Locale, RoleKey, Step2RolesModule } from "@seminar/contracts";
 import { classNames } from "@seminar/utils";
 import { useEffect, useMemo, useState } from "react";
 import { useAppContext } from "../app/useAppContext";
-import { ROLE_CONTENT } from "../content/roles";
 
 type ContentState = "loading" | "error" | "empty" | "success";
 
 type RoleTabsProps = {
-  activeRoleId?: string | null;
-  onRoleChange?: (roleId: string) => void;
+  content: Step2RolesModule;
+  activeRoleId?: RoleKey | null;
+  onRoleChange?: (roleId: RoleKey) => void;
 };
 
-export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: RoleTabsProps) {
+export function RoleTabs({ content, activeRoleId: externalActiveRoleId, onRoleChange }: RoleTabsProps) {
   const { locale, messages } = useAppContext();
-  const [internalActiveRoleId, setInternalActiveRoleId] = useState<string | null>(
-    () => ROLE_CONTENT[0]?.id ?? null
+  const orderedRoles = useMemo(
+    () =>
+      content.roles_order.map((roleKey) => ({
+        id: roleKey,
+        ...content.roles[roleKey]
+      })),
+    [content]
+  );
+  const [internalActiveRoleId, setInternalActiveRoleId] = useState<RoleKey | null>(
+    () => orderedRoles[0]?.id ?? null
   );
   const activeRoleId = externalActiveRoleId ?? internalActiveRoleId;
 
@@ -23,29 +31,26 @@ export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: R
       return;
     }
 
-    if (!ROLE_CONTENT.length) {
+    if (!orderedRoles.length) {
       setInternalActiveRoleId(null);
       return;
     }
 
-    if (!activeRoleId || !ROLE_CONTENT.some((role) => role.id === activeRoleId)) {
-      setInternalActiveRoleId(ROLE_CONTENT[0].id);
+    if (!activeRoleId || !orderedRoles.some((role) => role.id === activeRoleId)) {
+      setInternalActiveRoleId(orderedRoles[0].id);
     }
-  }, [activeRoleId, externalActiveRoleId]);
+  }, [activeRoleId, externalActiveRoleId, orderedRoles]);
 
-  const setActiveRoleId = (roleId: string) => {
+  const setActiveRoleId = (roleId: RoleKey) => {
     if (externalActiveRoleId === undefined) {
       setInternalActiveRoleId(roleId);
     }
     onRoleChange?.(roleId);
   };
 
-  const activeRole = useMemo(
-    () => ROLE_CONTENT.find((role) => role.id === activeRoleId),
-    [activeRoleId]
-  );
+  const activeRole = useMemo(() => orderedRoles.find((role) => role.id === activeRoleId), [activeRoleId, orderedRoles]);
 
-  const state: ContentState = !ROLE_CONTENT.length
+  const state: ContentState = !orderedRoles.length
     ? "empty"
     : !activeRole
       ? "error"
@@ -59,7 +64,7 @@ export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: R
   return (
     <section aria-label={messages.landing.tabsLabel} className="space-y-4">
       <div role="tablist" aria-label={messages.landing.tabsLabel} className="flex flex-wrap gap-2">
-        {ROLE_CONTENT.map((role) => (
+        {orderedRoles.map((role) => (
           <button
             key={role.id}
             type="button"
@@ -75,7 +80,7 @@ export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: R
                 : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-100"
             )}
           >
-            {role.title[locale]}
+            {role.label.i18n[locale]}
           </button>
         ))}
       </div>
@@ -97,7 +102,7 @@ export function RoleTabs({ activeRoleId: externalActiveRoleId, onRoleChange }: R
 
 type TabStateProps = {
   state: ContentState;
-  activeRole?: RoleContent;
+  activeRole?: Step2RolesModule["roles"][RoleKey] & { id: RoleKey };
   locale: Locale;
 };
 
@@ -127,20 +132,7 @@ function TabState({ state, activeRole, locale }: TabStateProps) {
           key={`${activeRole.id}:${story.id}`}
           className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
         >
-          <article className="space-y-2">
-            <p>
-              <span className="font-semibold">{messages.landing.storyFields.problem}:</span>{" "}
-              {story.problem[locale]}
-            </p>
-            <p>
-              <span className="font-semibold">{messages.landing.storyFields.solution}:</span>{" "}
-              {story.solution[locale]}
-            </p>
-            <p>
-              <span className="font-semibold">{messages.landing.storyFields.result}:</span>{" "}
-              {story.result[locale]}
-            </p>
-          </article>
+          <p>{story.text.i18n[locale]}</p>
         </li>
       ))}
     </ul>

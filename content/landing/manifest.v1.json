@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "module": "landing.manifest",
+  "modules": {
+    "landing.step1.hero": {
+      "path": "content/landing/step1.hero.v1.json",
+      "expects": "^1.0.0"
+    },
+    "landing.step2.roles": {
+      "path": "content/landing/step2.roles.v1.json",
+      "expects": "^1.0.0"
+    }
+  }
+}

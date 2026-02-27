@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0.0",
+  "module": "landing.step2.roles",
+  "roles_order": ["business_owner", "operations_lead", "it_lead"],
+  "roles": {
+    "business_owner": {
+      "label": {
+        "i18n": {
+          "ru": "Владелец бизнеса",
+          "en": "Business Owner"
+        }
+      },
+      "stories": [
+        {
+          "id": "roles.business_owner.story.s1",
+          "text": {
+            "i18n": {
+              "ru": "Хочу быстро понять бизнес-эффект и окупаемость, чтобы принять решение без «веры в магию».",
+              "en": "I want to understand business impact and ROI to decide without relying on hype."
+            }
+          }
+        },
+        {
+          "id": "roles.business_owner.story.s2",
+          "text": {
+            "i18n": {
+              "ru": "Хочу увидеть реальные кейсы ошибок и ограничений, чтобы снизить риск неправильного внедрения.",
+              "en": "I want real cases of failures and constraints to reduce rollout risk."
+            }
+          }
+        },
+        {
+          "id": "roles.business_owner.story.s3",
+          "text": {
+            "i18n": {
+              "ru": "Хочу оставить контакт за минуту и получить понятный следующий шаг по внедрению.",
+              "en": "I want to leave contact details in under a minute and get a clear next step."
+            }
+          }
+        }
+      ]
+    },
+    "operations_lead": {
+      "label": {
+        "i18n": {
+          "ru": "Руководитель операций",
+          "en": "Operations Lead"
+        }
+      },
+      "stories": [
+        {
+          "id": "roles.operations_lead.story.s1",
+          "text": {
+            "i18n": {
+              "ru": "Хочу увидеть типовые сценарии для моего отдела и понять, что можно ускорить уже в этом месяце.",
+              "en": "I want typical scenarios for my team and what can be accelerated this month."
+            }
+          }
+        },
+        {
+          "id": "roles.operations_lead.story.s2",
+          "text": {
+            "i18n": {
+              "ru": "Хочу понять формат работы и набор артефактов, чтобы внедрение стало повторяемым, а не разовым экспериментом.",
+              "en": "I want the working format and artifacts so adoption becomes repeatable, not a one-off experiment."
+            }
+          }
+        },
+        {
+          "id": "roles.operations_lead.story.s3",
+          "text": {
+            "i18n": {
+              "ru": "Хочу оставить телефон без сложной регистрации и быстро обсудить план с руководством.",
+              "en": "I want to leave my phone without complex signup and quickly align a plan with leadership."
+            }
+          }
+        }
+      ]
+    },
+    "it_lead": {
+      "label": {
+        "i18n": {
+          "ru": "IT-руководитель",
+          "en": "IT Lead"
+        }
+      },
+      "stories": [
+        {
+          "id": "roles.it_lead.story.s1",
+          "text": {
+            "i18n": {
+              "ru": "Хочу видеть практические ограничения и риски, чтобы оценить применимость и требования к данным.",
+              "en": "I want practical constraints and risks to assess applicability and data requirements."
+            }
+          }
+        },
+        {
+          "id": "roles.it_lead.story.s2",
+          "text": {
+            "i18n": {
+              "ru": "Хочу понимать, как обеспечивается безопасность: правила данных, контроль инструментов, журналирование.",
+              "en": "I want to understand how safety is ensured: data rules, tool control, and logging."
+            }
+          }
+        },
+        {
+          "id": "roles.it_lead.story.s3",
+          "text": {
+            "i18n": {
+              "ru": "Хочу обсудить технические рамки и следующий шаг после семинара, чтобы не застрять на уровне «поговорили».",
+              "en": "I want to discuss technical boundaries and the next step after the seminar so we don’t stay at talk level."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

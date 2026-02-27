@@ -40,6 +40,9 @@ jobs:
           pnpm --filter @seminar/web run typecheck
           pnpm run typecheck:functions
 
+      - name: Validate landing content
+        run: pnpm run validate:content
+
       - name: Build
         run: pnpm -r build
 

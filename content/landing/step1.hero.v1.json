@@ -1,0 +1,281 @@
+{
+  "schema_version": "1.0.0",
+  "module": "landing.step1.hero",
+  "anchors": {
+    "roles": "#roles",
+    "lead_form": "#lead-form"
+  },
+  "experiment": {
+    "id": "landing.hero.experiment_phase1",
+    "persist_key": "heroVariant",
+    "variants": ["aggressive", "rational", "partner"],
+    "distribution": {
+      "aggressive": 0.34,
+      "rational": 0.33,
+      "partner": 0.33
+    }
+  },
+  "variants": {
+    "aggressive": {
+      "headline": {
+        "i18n": {
+          "ru": "Семинар, который убирает дорогие ошибки в процессах",
+          "en": "A seminar that removes costly process mistakes"
+        }
+      },
+      "subheadline": {
+        "i18n": {
+          "ru": "Фокус на эффекте: сценарии, метрики, правила безопасности — и план внедрения на 30 дней",
+          "en": "Outcome-first: use-cases, metrics, safety rules — and a 30-day rollout plan"
+        }
+      },
+      "body": [
+        {
+          "id": "hero.aggressive.body.p1",
+          "text": {
+            "i18n": {
+              "ru": "Вы увидите, где в вашем отделе теряются деньги и время: документы, коммуникации, аналитика, подготовка презентаций и согласования.",
+              "en": "You’ll see where your department loses money and time: documents, communications, analytics, decks, and approvals."
+            }
+          }
+        },
+        {
+          "id": "hero.aggressive.body.p2",
+          "text": {
+            "i18n": {
+              "ru": "Мы разложим задачи на сценарии, покажем типовые ошибки и способы контроля качества (проверка фактов, устойчивые шаблоны, границы применимости).",
+              "en": "We’ll break work into use-cases, show common failure modes, and set up quality control (fact-checking, stable templates, and clear boundaries)."
+            }
+          }
+        },
+        {
+          "id": "hero.aggressive.body.p3",
+          "text": {
+            "i18n": {
+              "ru": "Отдельно фиксируем безопасные правила: что нельзя отдавать в публичные сервисы, как обезличивать данные и как согласовать это с ИБ и юристами.",
+              "en": "We’ll set safety rules: what must not go to public tools, how to de-identify data, and how to align with security and legal."
+            }
+          }
+        },
+        {
+          "id": "hero.aggressive.body.p4",
+          "text": {
+            "i18n": {
+              "ru": "На выходе — набор артефактов: библиотека промптов, чек-листы, и дорожная карта внедрения на 30 дней под вашу роль.",
+              "en": "You’ll leave with artifacts: a prompt library, checklists, and a 30-day rollout roadmap tailored to your role."
+            }
+          }
+        }
+      ],
+      "badges": [
+        {
+          "id": "hero.aggressive.badges.b1",
+          "text": {
+            "i18n": {
+              "ru": "Практика на задачах отдела",
+              "en": "Practice on real workflows"
+            }
+          }
+        },
+        {
+          "id": "hero.aggressive.badges.b2",
+          "text": {
+            "i18n": {
+              "ru": "Контроль качества и безопасность",
+              "en": "Quality control & safety"
+            }
+          }
+        }
+      ],
+      "cta": [
+        {
+          "id": "hero.aggressive.cta.roles_primary",
+          "text": {
+            "i18n": {
+              "ru": "Смотреть роли и сценарии",
+              "en": "See roles and scenarios"
+            }
+          },
+          "link": {
+            "kind": "anchor",
+            "target": "#roles"
+          }
+        }
+      ]
+    },
+    "rational": {
+      "headline": {
+        "i18n": {
+          "ru": "Системный подход к внедрению ИИ без хаоса",
+          "en": "A systematic AI rollout without chaos"
+        }
+      },
+      "subheadline": {
+        "i18n": {
+          "ru": "Понятная рамка: от диагностики процессов до пилота, метрик и закрепления результата",
+          "en": "A clear frame: from process diagnosis to pilot, metrics, and durable adoption"
+        }
+      },
+      "body": [
+        {
+          "id": "hero.rational.body.p1",
+          "text": {
+            "i18n": {
+              "ru": "Мы начинаем с диагностики: какие процессы можно ускорить, какие данные допустимы, где риски и ограничения.",
+              "en": "We start with diagnosis: which workflows to speed up, what data is allowed, and where the risks and constraints are."
+            }
+          }
+        },
+        {
+          "id": "hero.rational.body.p2",
+          "text": {
+            "i18n": {
+              "ru": "Дальше — сценарии по роли: что делегировать ассистенту, где нужен контроль человека, какие KPI считать.",
+              "en": "Then role-based scenarios: what to delegate to an assistant, where human control is required, and which KPIs to track."
+            }
+          }
+        },
+        {
+          "id": "hero.rational.body.p3",
+          "text": {
+            "i18n": {
+              "ru": "Покажем, как получать воспроизводимый результат: шаблоны промптов, структура контекста, проверка вывода и журналирование.",
+              "en": "We’ll show reproducible execution: prompt templates, context structure, output verification, and logging."
+            }
+          }
+        },
+        {
+          "id": "hero.rational.body.p4",
+          "text": {
+            "i18n": {
+              "ru": "Итог — согласованный план внедрения: кто владелец, какие этапы, какие артефакты, как измеряем эффект.",
+              "en": "Result: an aligned rollout plan—owners, stages, artifacts, and how impact is measured."
+            }
+          }
+        }
+      ],
+      "badges": [
+        {
+          "id": "hero.rational.badges.b1",
+          "text": {
+            "i18n": {
+              "ru": "Метрики и ROI",
+              "en": "Metrics & ROI"
+            }
+          }
+        },
+        {
+          "id": "hero.rational.badges.b2",
+          "text": {
+            "i18n": {
+              "ru": "Пошаговая методология",
+              "en": "Step-by-step methodology"
+            }
+          }
+        }
+      ],
+      "cta": [
+        {
+          "id": "hero.rational.cta.roles_primary",
+          "text": {
+            "i18n": {
+              "ru": "Выбрать роль",
+              "en": "Choose a role"
+            }
+          },
+          "link": {
+            "kind": "anchor",
+            "target": "#roles"
+          }
+        }
+      ]
+    },
+    "partner": {
+      "headline": {
+        "i18n": {
+          "ru": "Партнёрский формат для лидеров: бизнес, операции и IT",
+          "en": "A partner format for leaders: business, ops, and IT"
+        }
+      },
+      "subheadline": {
+        "i18n": {
+          "ru": "Собираем общий язык и план действий, чтобы внедрение не развалилось между функциями",
+          "en": "We align language and actions so rollout doesn’t break between functions"
+        }
+      },
+      "body": [
+        {
+          "id": "hero.partner.body.p1",
+          "text": {
+            "i18n": {
+              "ru": "Выравниваем ожидания: что считать успехом, где границы автоматизации, какие риски неприемлемы.",
+              "en": "We align expectations: what success means, automation boundaries, and unacceptable risks."
+            }
+          }
+        },
+        {
+          "id": "hero.partner.body.p2",
+          "text": {
+            "i18n": {
+              "ru": "Разбираем реальные кейсы: где ломается доверие к ИИ и как построить процесс так, чтобы результат был проверяемым.",
+              "en": "We dissect real cases: where trust breaks and how to build a process where results are verifiable."
+            }
+          }
+        },
+        {
+          "id": "hero.partner.body.p3",
+          "text": {
+            "i18n": {
+              "ru": "Согласуем правила данных и ответственности: кто утверждает, кто проверяет, кто владелец артефактов и регламентов.",
+              "en": "We align data and accountability rules: approvals, verification, ownership of artifacts and policies."
+            }
+          }
+        },
+        {
+          "id": "hero.partner.body.p4",
+          "text": {
+            "i18n": {
+              "ru": "На выходе — дорожная карта под роли и команда: что делать завтра, через неделю и через месяц.",
+              "en": "You leave with a role-based roadmap: what to do tomorrow, next week, and next month."
+            }
+          }
+        }
+      ],
+      "badges": [
+        {
+          "id": "hero.partner.badges.b1",
+          "text": {
+            "i18n": {
+              "ru": "Кросс-функционально",
+              "en": "Cross-functional"
+            }
+          }
+        },
+        {
+          "id": "hero.partner.badges.b2",
+          "text": {
+            "i18n": {
+              "ru": "План на 30 дней",
+              "en": "30-day plan"
+            }
+          }
+        }
+      ],
+      "cta": [
+        {
+          "id": "hero.partner.cta.roles_primary",
+          "text": {
+            "i18n": {
+              "ru": "Перейти к ролям",
+              "en": "Go to roles"
+            }
+          },
+          "link": {
+            "kind": "anchor",
+            "target": "#roles"
+          }
+        }
+      ]
+    }
+  }
+}

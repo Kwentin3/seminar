@@ -12,6 +12,7 @@
     "typecheck:functions": "tsc --noEmit -p tsconfig.functions.json",
     "dev": "pnpm --filter @seminar/contracts build && pnpm --filter @seminar/utils build && pnpm --filter @seminar/ui build && pnpm --filter @seminar/web dev",
     "preview": "pnpm --filter @seminar/web preview",
+    "validate:content": "pnpm --filter @seminar/contracts run build && node scripts/validate-landing-content.mjs",
     "dev:pages": "pnpm run build:web && wrangler pages dev apps/web/dist --local",
     "d1:migrate:local": "wrangler d1 migrations apply seminar-leads --local",
     "d1:migrate:preview": "wrangler d1 migrations apply seminar-leads --remote --preview",
