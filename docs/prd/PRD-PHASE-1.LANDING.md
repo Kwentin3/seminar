@@ -11,6 +11,7 @@ related:
   - docs/ARCHITECTURE/CONTEXT_GOVERNANCE.md
   - docs/DOCS_CANON.md
   - docs/adr/ADR-001.infrastructure.baseline.v1.md
+  - docs/contracts/CONTRACT-001.landing.content-json.v1.0.md
 tags:
   - prd
   - phase-1

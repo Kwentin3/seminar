@@ -9,6 +9,7 @@ core_snapshot: n/a
 related:
   - docs/DOCS_CANON.md
   - docs/templates/DOC_TEMPLATE.md
+  - docs/contracts/CONTRACT-001.landing.content-json.v1.0.md
 tags:
   - governance
   - context
