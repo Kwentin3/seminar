@@ -46,6 +46,9 @@ jobs:
       - name: Test landing content validator
         run: pnpm run test:content:validator
 
+      - name: Test observability contract
+        run: pnpm run test:obs
+
       - name: Build
         run: pnpm -r build
 

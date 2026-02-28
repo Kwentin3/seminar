@@ -5,6 +5,9 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { parsePhoneNumberFromString } from "libphonenumber-js/max";
+import { logger } from "./obs/logger.mjs";
+import { createRequestContextMiddleware } from "./obs/request-context.mjs";
+import { parseObsLevel, parseObsLimit, streamJournaldEvents } from "./obs/log-retrieval.mjs";
 
 const COUNTRY_REQUIRED_CODE = "country_required";
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -14,6 +17,8 @@ const IP_RATE_LIMIT_WINDOW_MINUTES = 10;
 const IP_RATE_LIMIT_MAX_REQUESTS = 5;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
+const OBS_LOG_LIMIT_DEFAULT = 200;
+const OBS_LOG_LIMIT_MAX = 2000;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
@@ -37,6 +42,8 @@ applyMigrations(db, migrationsDir);
 
 const app = express();
 app.set("trust proxy", true);
+app.use(createRequestContextMiddleware());
+app.use(createHttpLifecycleMiddleware());
 app.use(express.json({ limit: "64kb" }));
 
 app.get("/api/healthz", (_request, response) => {
@@ -44,13 +51,37 @@ app.get("/api/healthz", (_request, response) => {
 });
 
 app.post("/api/leads", async (request, response) => {
+  const startedAt = Date.now();
+  logger.info({
+    event: "lead_submit_started",
+    domain: "leads",
+    module: "leads/submit-handler",
+    payload: {
+      source: readString(request.body?.source) ?? "landing",
+      locale: readLocale(request.body?.locale) ?? "unknown"
+    }
+  });
+
+  const failLead = (status, errorBody, obsError) =>
+    respondLeadFailure({
+      response,
+      status,
+      errorBody,
+      startedAt,
+      obsError
+    });
+
   try {
     const payload = parseCreateLeadRequest(request.body);
     if (!payload.ok) {
-      return jsonError(response, 400, {
+      return failLead(
+        400,
+        {
         code: "invalid_input",
         message: payload.message
-      });
+        },
+        createObsError("leads.validation_failed", "validation", false, "domain", payload.message)
+      );
     }
 
     const remoteIp = getRemoteIp(request);
@@ -65,15 +96,35 @@ app.post("/api/leads", async (request, response) => {
     });
 
     if (!turnstileOk) {
-      return jsonError(response, 400, {
+      return failLead(
+        400,
+        {
         code: "turnstile_failed",
         message: "Turnstile verification failed."
-      });
+        },
+        createObsError(
+          "leads.turnstile_failed",
+          "dependency",
+          true,
+          "external",
+          "turnstile verification failed"
+        )
+      );
     }
 
     const normalizedPhone = normalizePhone(payload.data.phone, payload.data.country);
     if (!normalizedPhone.ok) {
-      return jsonError(response, normalizedPhone.status, normalizedPhone.error);
+      return failLead(
+        normalizedPhone.status,
+        normalizedPhone.error,
+        createObsError(
+          normalizedPhone.error.code === COUNTRY_REQUIRED_CODE ? "leads.country_required" : "leads.validation_failed",
+          "validation",
+          false,
+          "domain",
+          normalizedPhone.error.message
+        )
+      );
     }
 
     const duplicateCount = queryCount(
@@ -86,17 +137,25 @@ app.post("/api/leads", async (request, response) => {
     );
 
     if (duplicateCount === null) {
-      return jsonError(response, 500, {
+      return failLead(
+        500,
+        {
         code: "internal_error",
         message: "Failed to check duplicate leads."
-      });
+        },
+        createObsError("leads.internal_error", "internal", true, "infra", "duplicate check failed")
+      );
     }
 
     if (duplicateCount > 0) {
-      return jsonError(response, 409, {
+      return failLead(
+        409,
+        {
         code: "duplicate_lead",
         message: "Lead with this phone already exists in the last 24 hours."
-      });
+        },
+        createObsError("leads.duplicate_lead", "validation", false, "domain", "duplicate lead")
+      );
     }
 
     if (!ipHash) {
@@ -110,17 +169,25 @@ app.post("/api/leads", async (request, response) => {
       );
 
       if (fallbackPhoneLimitedCount === null) {
-        return jsonError(response, 500, {
+        return failLead(
+          500,
+          {
           code: "internal_error",
           message: "Failed to check fallback request rate."
-        });
+          },
+          createObsError("leads.internal_error", "internal", true, "infra", "fallback rate limit check failed")
+        );
       }
 
       if (fallbackPhoneLimitedCount >= FALLBACK_PHONE_LIMIT_MAX_REQUESTS) {
-        return jsonError(response, 429, {
+        return failLead(
+          429,
+          {
           code: "rate_limited",
           message: "Too many requests. Please try again later."
-        });
+          },
+          createObsError("leads.rate_limited", "validation", true, "domain", "fallback phone rate limit")
+        );
       }
     } else {
       const rateLimitedCount = queryCount(
@@ -133,17 +200,25 @@ app.post("/api/leads", async (request, response) => {
       );
 
       if (rateLimitedCount === null) {
-        return jsonError(response, 500, {
+        return failLead(
+          500,
+          {
           code: "internal_error",
           message: "Failed to check request rate."
-        });
+          },
+          createObsError("leads.internal_error", "internal", true, "infra", "ip rate limit check failed")
+        );
       }
 
       if (rateLimitedCount >= IP_RATE_LIMIT_MAX_REQUESTS) {
-        return jsonError(response, 429, {
+        return failLead(
+          429,
+          {
           code: "rate_limited",
           message: "Too many requests. Please try again later."
-        });
+          },
+          createObsError("leads.rate_limited", "validation", true, "domain", "ip rate limit")
+        );
       }
     }
 
@@ -177,12 +252,30 @@ app.post("/api/leads", async (request, response) => {
       ipHash
     );
 
+    logger.info({
+      event: "lead_submit_completed",
+      domain: "leads",
+      module: "leads/submit-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        source: payload.data.source
+      }
+    });
+
     return response.status(200).json({
       ok: true,
       lead_id: leadId
     });
   } catch (error) {
-    console.error("Unhandled /api/leads error", error);
+    logger.error({
+      event: "lead_submit_failed",
+      domain: "leads",
+      module: "leads/submit-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: { status_code: 500, reason: "unhandled_exception" },
+      error: createObsError("leads.unhandled_exception", "internal", true, "infra", "unhandled /api/leads error")
+    });
     return jsonError(response, 500, {
       code: "internal_error",
       message: "Unexpected server error."
@@ -191,20 +284,10 @@ app.post("/api/leads", async (request, response) => {
 });
 
 app.get("/api/admin/leads", (request, response) => {
+  const startedAt = Date.now();
   try {
-    if (!adminSecret) {
-      return jsonError(response, 500, {
-        code: "internal_error",
-        message: "ADMIN_SECRET is not configured."
-      });
-    }
-
-    const incomingSecret = readString(request.get("X-Admin-Secret"));
-    if (!isSecretValid(incomingSecret, adminSecret)) {
-      return jsonError(response, 401, {
-        code: "admin_unauthorized",
-        message: "Unauthorized admin request."
-      });
+    if (!authenticateAdminRequest(request, response, startedAt, "admin/leads-handler")) {
+      return undefined;
     }
 
     const limit = readLimit(request.query.limit);
@@ -236,11 +319,93 @@ app.get("/api/admin/leads", (request, response) => {
       }))
     });
   } catch (error) {
-    console.error("Unhandled /api/admin/leads error", error);
+    logger.error({
+      event: "admin_auth_failed",
+      domain: "admin",
+      module: "admin/leads-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: { status_code: 500, endpoint: "/api/admin/leads" },
+      error: createObsError("admin.unhandled_exception", "internal", true, "infra", "unhandled admin leads error")
+    });
     return jsonError(response, 500, {
       code: "internal_error",
       message: "Unexpected server error."
     });
+  }
+});
+
+app.get("/admin/obs/logs", async (request, response) => {
+  const startedAt = Date.now();
+  try {
+    if (!authenticateAdminRequest(request, response, startedAt, "admin/obs-logs-handler")) {
+      return undefined;
+    }
+
+    const since = readString(request.query.since);
+    if (!since) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "since is required."
+      });
+    }
+
+    const levelRaw = readString(request.query.level);
+    const level = levelRaw ? parseObsLevel(levelRaw, { required: true }) : undefined;
+    if (levelRaw && !level) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "level must be debug|info|warn|error."
+      });
+    }
+
+    const limit = parseObsLimit(request.query.limit, {
+      defaultValue: OBS_LOG_LIMIT_DEFAULT,
+      maxValue: OBS_LOG_LIMIT_MAX
+    });
+    const requestId = readString(request.query.request_id);
+    const until = readString(request.query.until);
+    const abortController = new AbortController();
+    request.once("close", () => {
+      abortController.abort();
+    });
+
+    response.status(200);
+    response.setHeader("content-type", "application/x-ndjson; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
+    response.flushHeaders();
+
+    await streamJournaldEvents({
+      since,
+      until,
+      level,
+      requestId,
+      limit,
+      signal: abortController.signal,
+      onEvent: (event) => {
+        response.write(`${JSON.stringify(event)}\n`);
+      }
+    });
+    response.end();
+    return undefined;
+  } catch (error) {
+    logger.error({
+      event: "admin_auth_failed",
+      domain: "admin",
+      module: "admin/obs-logs-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: { status_code: 500, endpoint: "/admin/obs/logs" },
+      error: createObsError("admin.obs_logs_failed", "internal", true, "infra", "obs log retrieval failed")
+    });
+
+    if (!response.headersSent) {
+      return jsonError(response, 500, {
+        code: "internal_error",
+        message: "Unexpected server error."
+      });
+    }
+
+    response.end();
+    return undefined;
   }
 });
 
@@ -266,13 +431,26 @@ app.get("*", (request, response, next) => {
 
 app.use((error, _request, response, _next) => {
   if (error instanceof SyntaxError && "body" in error) {
+    logger.warn({
+      event: "http_request_failed",
+      domain: "runtime",
+      module: "runtime/http-middleware",
+      payload: { status_code: 400, reason: "invalid_json" },
+      error: createObsError("runtime.invalid_json", "validation", false, "domain", "request body must be valid json")
+    });
     return jsonError(response, 400, {
       code: "invalid_input",
       message: "Request body must be valid JSON."
     });
   }
 
-  console.error("Unhandled application error", error);
+  logger.error({
+    event: "http_request_failed",
+    domain: "runtime",
+    module: "runtime/http-middleware",
+    payload: { status_code: 500, reason: "unhandled_error" },
+    error: createObsError("runtime.unhandled_error", "internal", true, "infra", "unhandled application error")
+  });
   return jsonError(response, 500, {
     code: "internal_error",
     message: "Unexpected server error."
@@ -280,14 +458,52 @@ app.use((error, _request, response, _next) => {
 });
 
 app.listen(port, host, () => {
-  console.log(`Server is running on http://${host}:${port}`);
-  console.log(`Static directory: ${staticDir}`);
-  console.log(`Database path: ${databasePath}`);
+  logger.info({
+    event: "runtime_server_started",
+    domain: "runtime",
+    module: "runtime/server-bootstrap",
+    payload: {
+      host,
+      port,
+      static_dir: staticDir,
+      database_path: databasePath
+    }
+  });
   if (!turnstileSecretKey) {
-    console.warn("TURNSTILE_SECRET_KEY is not set; captcha verification is disabled.");
+    logger.warn({
+      event: "runtime_dependency_failed",
+      domain: "runtime",
+      module: "runtime/server-bootstrap",
+      payload: {
+        dependency: "turnstile",
+        reason: "missing_secret_key"
+      },
+      error: createObsError(
+        "runtime.turnstile_not_configured",
+        "dependency",
+        true,
+        "infra",
+        "turnstile secret key is not configured"
+      )
+    });
   }
   if (!adminSecret) {
-    console.warn("ADMIN_SECRET is not set; /api/admin/leads will return config error.");
+    logger.warn({
+      event: "runtime_dependency_failed",
+      domain: "runtime",
+      module: "runtime/server-bootstrap",
+      payload: {
+        dependency: "admin_secret",
+        reason: "missing_admin_secret"
+      },
+      error: createObsError(
+        "runtime.admin_secret_missing",
+        "dependency",
+        true,
+        "infra",
+        "admin secret is not configured"
+      )
+    });
   }
 });
 
@@ -609,6 +825,125 @@ function readPort(rawPort, fallback) {
   }
 
   return parsed;
+}
+
+function createHttpLifecycleMiddleware() {
+  return (request, response, next) => {
+    const startedAt = Date.now();
+    logger.info({
+      event: "http_request_started",
+      domain: "runtime",
+      module: "runtime/http-middleware",
+      payload: {
+        method: request.method,
+        path: request.path
+      }
+    });
+
+    let finalized = false;
+    const finalize = () => {
+      if (finalized) {
+        return;
+      }
+      finalized = true;
+      logger.info({
+        event: "http_request_completed",
+        domain: "runtime",
+        module: "runtime/http-middleware",
+        duration_ms: elapsedMs(startedAt),
+        payload: {
+          method: request.method,
+          path: request.path,
+          status_code: response.statusCode
+        }
+      });
+      logger.flushRequestDiagnostics();
+    };
+
+    response.once("finish", finalize);
+    response.once("close", finalize);
+
+    next();
+  };
+}
+
+function elapsedMs(startedAt) {
+  return Math.max(0, Date.now() - startedAt);
+}
+
+function createObsError(code, category, retryable, origin, message) {
+  return {
+    code,
+    category,
+    retryable,
+    origin,
+    message: readString(message) ?? "operation failed"
+  };
+}
+
+function respondLeadFailure({ response, status, errorBody, startedAt, obsError }) {
+  logger.error({
+    event: "lead_submit_failed",
+    domain: "leads",
+    module: "leads/submit-handler",
+    duration_ms: elapsedMs(startedAt),
+    payload: {
+      status_code: status,
+      reason: errorBody.code
+    },
+    error: obsError
+  });
+  return jsonError(response, status, errorBody);
+}
+
+function authenticateAdminRequest(request, response, startedAt, moduleName) {
+  if (!adminSecret) {
+    logger.error({
+      event: "admin_auth_failed",
+      domain: "admin",
+      module: moduleName,
+      duration_ms: elapsedMs(startedAt),
+      payload: { endpoint: request.path, status_code: 500 },
+      error: createObsError(
+        "admin.secret_missing",
+        "dependency",
+        true,
+        "infra",
+        "admin secret is not configured"
+      )
+    });
+    jsonError(response, 500, {
+      code: "internal_error",
+      message: "ADMIN_SECRET is not configured."
+    });
+    return false;
+  }
+
+  const incomingSecret = readString(request.get("X-Admin-Secret"));
+  if (!isSecretValid(incomingSecret, adminSecret)) {
+    logger.warn({
+      event: "admin_auth_failed",
+      domain: "admin",
+      module: moduleName,
+      duration_ms: elapsedMs(startedAt),
+      payload: { endpoint: request.path, status_code: 401 },
+      error: createObsError("admin.unauthorized", "validation", false, "domain", "unauthorized admin request")
+    });
+    jsonError(response, 401, {
+      code: "admin_unauthorized",
+      message: "Unauthorized admin request."
+    });
+    return false;
+  }
+
+  logger.info({
+    event: "admin_auth_succeeded",
+    domain: "admin",
+    module: moduleName,
+    duration_ms: elapsedMs(startedAt),
+    payload: { endpoint: request.path }
+  });
+  return true;
 }
 
 function jsonError(response, status, error) {
