@@ -20,6 +20,8 @@
 5. [Infrastructure ADR](./adr/ADR-001.infrastructure.baseline.v1.md)
 6. [Phase 1 PRD](./prd/PRD-PHASE-1.LANDING.md)
 7. [Documentation Canon](./DOCS_CANON.md)
+8. [Observability Contract: Logging Event Model v0.4](./contracts/CONTRACT-OBS-001.logging.event-model.v0.4.md)
+9. [OBS Incident Playbook (LLM-Friendly)](./runbooks/OBS_INCIDENT_PLAYBOOK.md)
 
 ## Local Developer Flow (Short)
 
