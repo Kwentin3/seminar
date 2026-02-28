@@ -67,13 +67,11 @@ Admin endpoints в коде:
 1. `pnpm run test:obs` -> PASS (12/12)
 2. `pnpm run lint` -> PASS
 3. `pnpm run typecheck` -> PASS
+4. `pnpm run test:smoke:leads` -> PASS (`lead_id=4c8b7e8c-9d56-45c4-b21b-11e365e0f1cf`, `duplicate=409`, `rate_limited=429`)
 
 Подтверждённые сигналы из интеграционных тестов:
 - auth-case: `event=admin_auth_failed`, `error.code=admin.unauthorized`, статус 401, корреляция по `x-request-id`.
 - internal-case: `event=admin_action_failed`, `error.code=admin.obs_logs_failed`, статус 500, для того же `request_id` отсутствует `admin_auth_failed`.
-
-Дополнительно:
-- `pnpm run test:smoke:leads` в текущем окружении FAIL по причине отсутствия поднятого dev-сервера на `http://127.0.0.1:8787` (контекст окружения, не регрессия по изменённой логике).
 
 ## 7. Strategic Gate verdict
 1. Это не workaround, а устранение модели дрейфа: auth и internal теперь разведены детерминированно.
