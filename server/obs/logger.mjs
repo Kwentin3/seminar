@@ -2,11 +2,13 @@ import process from "node:process";
 import { getRequestContext } from "./request-context.mjs";
 
 const LEVELS = new Set(["debug", "info", "warn", "error"]);
+const DOMAINS = new Set(["runtime", "content", "landing", "leads", "admin", "obs"]);
 const EVENT_REGEX = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 const EVENT_TENSE_REGEX = /(_started|_completed|_failed|_selected|_limited|_detected|_loaded|_succeeded|_denied)$/;
 const MODULE_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*(\/[a-z0-9]+(-[a-z0-9]+)*)*$/;
 const MAX_EVENT_BYTES = 4 * 1024;
 const REDACTED_VALUE = "***redacted***";
+const ERROR_CODE_NAMESPACE_PREFIXES = ["content.", "leads.", "admin.", "runtime.", "obs."];
 
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/g;
@@ -55,6 +57,21 @@ function normalizeMessage(value) {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? redactString(trimmed) : "unknown error";
+}
+
+function hasValidErrorCodeNamespace(code) {
+  return typeof code === "string" && ERROR_CODE_NAMESPACE_PREFIXES.some((prefix) => code.startsWith(prefix));
+}
+
+function normalizeRequestIdForEmergency(value) {
+  if (typeof value !== "string") {
+    return "unknown";
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "unknown";
+  }
+  return trimmed.slice(0, 128);
 }
 
 function redactValue(value, keyHint = "", depth = 0, seen = new WeakSet()) {
@@ -289,17 +306,49 @@ export function createLogger(options = {}) {
       return { serialized, truncated: true };
     }
 
+    // Contract hard bound: if the full event is still oversized, replace it deterministically
+    // with a minimal obs event to guarantee serialized size <= 4KB.
+    record.level = "error";
+    record.event = "obs.event_size_exceeded";
+    record.domain = "obs";
+    record.module = "obs/logger";
+    record.request_id = normalizeRequestIdForEmergency(record.request_id);
+    record.payload = {};
+    record.error = {
+      code: "obs.event_size_exceeded",
+      category: "internal",
+      retryable: false,
+      origin: "obs",
+      message: "event size exceeded"
+    };
+    record.meta = {
+      schema: "obs.event.v0.4",
+      payload_truncated: true,
+      logger_error: true
+    };
+    serialized = safeJsonStringify(toSerializableRecord(record));
+    if (stringByteSize(serialized) <= MAX_EVENT_BYTES) {
+      return { serialized, truncated: true };
+    }
+
     const minimal = safeJsonStringify({
       ts: record.ts,
-      level: record.level,
-      event: record.event,
-      domain: record.domain,
-      module: record.module,
-      request_id: record.request_id,
+      level: "error",
+      event: "obs.event_size_exceeded",
+      domain: "obs",
+      module: "obs/logger",
+      request_id: "unknown",
       payload: {},
-      error: null,
+      error: {
+        code: "obs.event_size_exceeded",
+        category: "internal",
+        retryable: false,
+        origin: "obs",
+        message: "event size exceeded"
+      },
       meta: {
         schema: "obs.event.v0.4",
+        payload_truncated: true,
         logger_error: true
       }
     });
@@ -373,8 +422,19 @@ export function createLogger(options = {}) {
 
   function normalizeEntry(rawEntry) {
     const context = getRequestContext();
-    const level = LEVELS.has(rawEntry?.level) ? rawEntry.level : "info";
+    // No implicit semantic fallback: invalid/missing level is a schema violation.
+    let level = rawEntry?.level;
     const meta = createMeta();
+    if (!LEVELS.has(level)) {
+      level = "error";
+      meta.schema_violation = true;
+      emitObsEvent({
+        event: "obs.schema_violation_detected",
+        requestId: context?.request_id ?? "unknown",
+        keySuffix: "level",
+        payload: { field: "level" }
+      });
+    }
 
     let event = typeof rawEntry?.event === "string" ? rawEntry.event : "";
     if (!EVENT_REGEX.test(event) || !EVENT_TENSE_REGEX.test(event)) {
@@ -400,7 +460,19 @@ export function createLogger(options = {}) {
       });
     }
 
-    const domain = typeof rawEntry?.domain === "string" && rawEntry.domain.trim() ? rawEntry.domain.trim() : "obs";
+    // No implicit semantic fallback: invalid/missing domain is a schema violation.
+    const rawDomain = typeof rawEntry?.domain === "string" && rawEntry.domain.trim() ? rawEntry.domain.trim() : null;
+    const domain = rawDomain && DOMAINS.has(rawDomain) ? rawDomain : "obs";
+    if (!rawDomain || !DOMAINS.has(rawDomain)) {
+      meta.schema_violation = true;
+      emitObsEvent({
+        event: "obs.schema_violation_detected",
+        requestId: context?.request_id ?? "unknown",
+        keySuffix: "domain",
+        payload: { field: "domain" }
+      });
+    }
+
     let requestId = context?.request_id ?? null;
     if (!requestId) {
       requestId = "unknown";
@@ -431,7 +503,25 @@ export function createLogger(options = {}) {
 
     let error = null;
     try {
-      error = redactValue(normalizeErrorContract(level, rawEntry?.error));
+      const normalizedError = normalizeErrorContract(level, rawEntry?.error);
+      if (normalizedError && !hasValidErrorCodeNamespace(normalizedError.code)) {
+        meta.schema_violation = true;
+        emitObsEvent({
+          event: "obs.schema_violation_detected",
+          requestId: requestId ?? context?.request_id ?? "unknown",
+          keySuffix: "error.code",
+          payload: { field: "error.code" }
+        });
+        error = redactValue({
+          code: "obs.invalid_error_code_namespace",
+          category: "internal",
+          retryable: false,
+          origin: "obs",
+          message: "invalid error code namespace"
+        });
+      } else {
+        error = redactValue(normalizedError);
+      }
     } catch {
       error = null;
       meta.redaction_failed = true;

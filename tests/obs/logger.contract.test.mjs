@@ -175,3 +175,99 @@ test("async correlation keeps request_id across await, timer and microtask", asy
     assert.equal(record.request_id, "req_async_correlation");
   }
 });
+
+test("logger never throws on forced error paths", () => {
+  const logger = createLogger({
+    writer: () => {
+      throw new Error("writer failed");
+    }
+  });
+
+  const circularPayload = {};
+  circularPayload.self = circularPayload;
+
+  const invalidErrorObject = {};
+  Object.defineProperty(invalidErrorObject, "code", {
+    get() {
+      throw new Error("broken error code getter");
+    }
+  });
+
+  const context = createRequestContext("req_never_throw");
+  assert.doesNotThrow(() => {
+    runWithRequestContext(context, () => {
+      logger.log({
+        level: "fatal",
+        event: "lead_submit_started",
+        domain: "leads",
+        module: "leads/submit-handler",
+        payload: circularPayload,
+        error: invalidErrorObject
+      });
+    });
+  });
+});
+
+test("invalid error namespace is replaced and marked as schema violation", () => {
+  const { logger, records } = createCaptureLogger();
+  const context = createRequestContext("req_error_namespace");
+
+  runWithRequestContext(context, () => {
+    logger.error({
+      event: "lead_submit_failed",
+      domain: "leads",
+      module: "leads/submit-handler",
+      error: {
+        code: "validation_failed",
+        category: "validation",
+        retryable: false,
+        origin: "domain",
+        message: "payload rejected"
+      }
+    });
+  });
+
+  const parsed = records();
+  const mainRecord = parsed.find((record) => record.domain === "leads" && record.event === "lead_submit_failed");
+  assert.ok(mainRecord, "expected leads record");
+  assert.equal(mainRecord.error.code, "obs.invalid_error_code_namespace");
+  assert.equal(mainRecord.meta.schema_violation, true);
+  assert.equal(
+    parsed.some((record) => record.event === "obs.schema_violation_detected" && record.payload.field === "error.code"),
+    true
+  );
+});
+
+test("strict 4KB cap applies to full serialized event for adversarial input", () => {
+  const { logger, lines, records } = createCaptureLogger();
+  const hugeEvent = `${"a".repeat(3200)}_started`;
+  const hugeModule = `${"b".repeat(1700)}/${"c".repeat(1700)}`;
+  const hugeRequestId = `req_${"x".repeat(6000)}`;
+  const context = createRequestContext(hugeRequestId);
+
+  runWithRequestContext(context, () => {
+    logger.error({
+      event: hugeEvent,
+      domain: "runtime",
+      module: hugeModule,
+      error: {
+        code: "runtime.unhandled_error",
+        category: "internal",
+        retryable: false,
+        origin: "infra",
+        message: "oversized event test"
+      }
+    });
+  });
+
+  const parsed = records();
+  const mainRecord = parsed.find((record) => record.event === "obs.event_size_exceeded");
+  assert.ok(mainRecord, "expected obs.event_size_exceeded fallback record");
+  assert.equal(mainRecord.level, "error");
+  assert.equal(mainRecord.domain, "obs");
+  assert.equal(mainRecord.module, "obs/logger");
+  assert.equal(mainRecord.meta.payload_truncated, true);
+  assert.equal(mainRecord.meta.logger_error, true);
+  const line = lines[parsed.indexOf(mainRecord)];
+  assert.equal(Buffer.byteLength(line, "utf8") <= 4 * 1024, true);
+});
