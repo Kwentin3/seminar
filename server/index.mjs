@@ -320,12 +320,12 @@ app.get("/api/admin/leads", (request, response) => {
     });
   } catch (error) {
     logger.error({
-      event: "admin_auth_failed",
+      event: "admin_action_failed",
       domain: "admin",
       module: "admin/leads-handler",
       duration_ms: elapsedMs(startedAt),
       payload: { status_code: 500, endpoint: "/api/admin/leads" },
-      error: createObsError("admin.unhandled_exception", "internal", true, "infra", "unhandled admin leads error")
+      error: createObsError("admin.leads_query_failed", "internal", true, "infra", "admin leads query failed")
     });
     return jsonError(response, 500, {
       code: "internal_error",
@@ -368,11 +368,17 @@ app.get("/admin/obs/logs", async (request, response) => {
     request.once("close", () => {
       abortController.abort();
     });
-
-    response.status(200);
-    response.setHeader("content-type", "application/x-ndjson; charset=utf-8");
-    response.setHeader("cache-control", "no-store");
-    response.flushHeaders();
+    let responseStarted = false;
+    const ensureStreamingResponse = () => {
+      if (responseStarted) {
+        return;
+      }
+      responseStarted = true;
+      response.status(200);
+      response.setHeader("content-type", "application/x-ndjson; charset=utf-8");
+      response.setHeader("cache-control", "no-store");
+      response.flushHeaders();
+    };
 
     await streamJournaldEvents({
       since,
@@ -382,14 +388,17 @@ app.get("/admin/obs/logs", async (request, response) => {
       limit,
       signal: abortController.signal,
       onEvent: (event) => {
+        ensureStreamingResponse();
         response.write(`${JSON.stringify(event)}\n`);
       }
     });
+
+    ensureStreamingResponse();
     response.end();
     return undefined;
   } catch (error) {
     logger.error({
-      event: "admin_auth_failed",
+      event: "admin_action_failed",
       domain: "admin",
       module: "admin/obs-logs-handler",
       duration_ms: elapsedMs(startedAt),
@@ -899,7 +908,7 @@ function respondLeadFailure({ response, status, errorBody, startedAt, obsError }
 function authenticateAdminRequest(request, response, startedAt, moduleName) {
   if (!adminSecret) {
     logger.error({
-      event: "admin_auth_failed",
+      event: "admin_action_failed",
       domain: "admin",
       module: moduleName,
       duration_ms: elapsedMs(startedAt),

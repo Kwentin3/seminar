@@ -165,13 +165,13 @@ Commands:
 ```bash
 SINCE="$(date -u -d '60 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
 pnpm run obs:logs -- --since "$SINCE" --level warn --limit 500 | jq -c 'select(.event=="admin_auth_failed")'
-pnpm run obs:logs -- --since "$SINCE" --level error --limit 500 | jq -c 'select(.event=="admin_auth_failed" or .event=="http_request_failed")'
+pnpm run obs:logs -- --since "$SINCE" --level error --limit 500 | jq -c 'select(.event=="admin_action_failed" or .event=="http_request_failed")'
 ```
 
 Expected signals:
 - `admin_auth_failed` + `error.code=admin.unauthorized` -> auth проблема (401).
-- `admin_auth_failed` + `error.code=admin.secret_missing` -> env проблема (500).
-- `admin_auth_failed` + `error.code=admin.unhandled_exception|admin.obs_logs_failed` -> внутренняя ошибка.
+- `admin_action_failed` + `error.code=admin.secret_missing` -> env проблема (500).
+- `admin_action_failed` + `error.code=admin.action_failed|admin.unhandled_exception|admin.obs_logs_failed|admin.leads_query_failed` -> внутренняя ошибка.
 
 Next action:
 - сначала исключить auth/env, затем идти в trace по конкретному `request_id`.
