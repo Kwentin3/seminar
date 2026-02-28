@@ -228,6 +228,32 @@ Expected signals:
 Next action:
 - выбрать top-N медленных `request_id` и пройти trace для корневой причины.
 
+### G) Лендинг деградировал из-за контента (`content`/`landing`)
+Symptoms:
+- Hero/roles ведут себя нестабильно после релиза контента.
+
+Hypotheses:
+- bundle не загрузился (`content_bundle_failed`);
+- bundle загружен, но контракт нарушен (`content_schema_violation_detected`);
+- рендер деградировал (`landing_render_degraded`).
+
+Commands:
+```bash
+SINCE="$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+pnpm run obs:logs -- --since "$SINCE" --level info --limit 1000 | jq -c 'select(.event=="content_bundle_loaded" or .event=="hero_variant_selected")'
+pnpm run obs:logs -- --since "$SINCE" --level warn --limit 1000 | jq -c 'select(.event=="content_schema_violation_detected" or .event=="landing_render_degraded")'
+pnpm run obs:logs -- --since "$SINCE" --level error --limit 1000 | jq -c 'select(.event=="content_bundle_failed")'
+```
+
+Expected signals:
+- `content_bundle_loaded` + `payload.content_bundle_hash`.
+- `hero_variant_selected` + `payload.variant_id|reason|content_unit_hash`.
+- `content_schema_violation_detected` + `error.code=content.*` + `payload.degradation_tier`.
+- `landing_render_degraded` + `error.code=landing.*`.
+
+Next action:
+- взять `request_id` из первого `warn/error` и пройти Request Trace Workflow.
+
 ## Request Trace Workflow
 1. Найти проблемное событие (`warn`/`error`) и выписать `request_id`.
 2. Выгрузить timeline по `request_id` в нескольких severity:
@@ -271,11 +297,12 @@ curl -N \
 ```
 
 ## GAP / Limitations
-- На текущем этапе в runtime стабильно есть `runtime/leads/admin/obs` события.
-- `content` и `landing` MUST-события из контракта (`content_bundle_*`, `hero_variant_selected`, `landing_render_degraded`) пока не внедрены в production-path.
-- Временный подход диагностики до закрытия GAP:
-  - опираться на `runtime + leads + admin + obs`;
-  - использовать `request_id`-trace как основной инструмент.
+- В runtime доступны события доменов `runtime`, `content`, `landing`, `leads`, `admin`, `obs`.
+- Для `content/landing` диагностики ориентироваться на связку:
+  - `content_bundle_loaded|content_bundle_failed`
+  - `content_schema_violation_detected`
+  - `hero_variant_selected`
+  - `landing_render_degraded`
 
 ## Appendix: One-Liners
 1. `warn` за 15 минут:
@@ -325,4 +352,12 @@ pnpm run obs:logs -- --since "<SINCE_ISO>" --level info --limit 2000 | jq -r '.d
 12. Топ request_id в error (best-effort):
 ```bash
 pnpm run obs:logs -- --since "<SINCE_ISO>" --level error --limit 2000 | jq -r '.request_id' | sort | uniq -c | sort -nr | head
+```
+13. `content_bundle_failed` за окно:
+```bash
+pnpm run obs:logs -- --since "<SINCE_ISO>" --level error --limit 1000 | jq -c 'select(.event=="content_bundle_failed")'
+```
+14. `landing_render_degraded` за окно:
+```bash
+pnpm run obs:logs -- --since "<SINCE_ISO>" --level warn --limit 1000 | jq -c 'select(.event=="landing_render_degraded")'
 ```

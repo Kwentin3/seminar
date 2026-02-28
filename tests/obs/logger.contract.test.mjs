@@ -238,6 +238,35 @@ test("invalid error namespace is replaced and marked as schema violation", () =>
   );
 });
 
+test("landing error namespace and landing_render_degraded event are accepted", () => {
+  const { logger, records } = createCaptureLogger();
+  const context = createRequestContext("req_landing_namespace");
+
+  runWithRequestContext(context, () => {
+    logger.warn({
+      event: "landing_render_degraded",
+      domain: "landing",
+      module: "landing/render",
+      error: {
+        code: "landing.render_degraded",
+        category: "validation",
+        retryable: false,
+        origin: "domain",
+        message: "landing degraded"
+      },
+      payload: {
+        reason: "content_schema_violation"
+      }
+    });
+  });
+
+  const parsed = records();
+  const mainRecord = parsed.find((record) => record.domain === "landing" && record.event === "landing_render_degraded");
+  assert.ok(mainRecord, "expected landing render degraded record");
+  assert.equal(mainRecord.error.code, "landing.render_degraded");
+  assert.equal(mainRecord.meta.schema_violation ?? false, false);
+});
+
 test("strict 4KB cap applies to full serialized event for adversarial input", () => {
   const { logger, lines, records } = createCaptureLogger();
   const hugeEvent = `${"a".repeat(3200)}_started`;

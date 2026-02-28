@@ -8,6 +8,7 @@ import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 import { logger } from "./obs/logger.mjs";
 import { createRequestContextMiddleware } from "./obs/request-context.mjs";
 import { parseObsLevel, parseObsLimit, streamJournaldEvents } from "./obs/log-retrieval.mjs";
+import { observeLandingRequest } from "./landing/content-observability.mjs";
 
 const COUNTRY_REQUIRED_CODE = "country_required";
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -25,6 +26,7 @@ const repoRoot = resolve(__dirname, "..");
 const staticDir = resolvePath(process.env.STATIC_DIR, join(repoRoot, "apps", "web", "dist"));
 const migrationsDir = resolvePath(process.env.MIGRATIONS_DIR, join(repoRoot, "migrations"));
 const databasePath = resolvePath(process.env.DATABASE_PATH, join(repoRoot, "data", "seminar.sqlite"));
+const landingContentManifestPath = readString(process.env.LANDING_CONTENT_MANIFEST_PATH);
 
 const host = readString(process.env.HOST) ?? "0.0.0.0";
 const port = readPort(process.env.PORT, 8787);
@@ -426,9 +428,18 @@ app.use("/api", (_request, response) => {
 });
 
 app.use(express.static(staticDir, { index: false }));
-app.get("*", (request, response, next) => {
+app.get("*", async (request, response, next) => {
   if (request.path.startsWith("/api/")) {
     return next();
+  }
+
+  if (request.path === "/") {
+    await observeLandingRequest({
+      logger,
+      request,
+      repoRoot,
+      manifestPathOverride: landingContentManifestPath
+    });
   }
 
   return response.sendFile(join(staticDir, "index.html"), (error) => {
