@@ -5,6 +5,23 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish_image:
+        description: "Publish Docker image to GHCR"
+        required: true
+        type: boolean
+        default: true
+      run_docker_smoke_deploy:
+        description: "Run docker smoke deploy on VPS"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -94,6 +111,106 @@ jobs:
             cat /tmp/seminar-app.log
             exit 1
           fi
+
+  docker_publish:
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 45
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_image == 'true')
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_name: ${{ steps.meta.outputs.image_name }}
+      image_ref: ${{ steps.digest.outputs.image_ref }}
+      digest: ${{ steps.build.outputs.digest }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      build_id: ${{ steps.meta.outputs.build_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare image metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_NAME="ghcr.io/${OWNER_LC}/seminar"
+          SHORT_SHA="${GITHUB_SHA::12}"
+          BUILD_ID="${GITHUB_SHA}"
+
+          TAGS=("${IMAGE_NAME}:sha-${SHORT_SHA}")
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            TAGS+=("${IMAGE_NAME}:main")
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            SAFE_TAG="$(echo "${TAG_NAME}" | tr '/' '-')"
+            TAGS+=("${IMAGE_NAME}:${SAFE_TAG}")
+          fi
+
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_id=${BUILD_ID}" >> "$GITHUB_OUTPUT"
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${TAGS[@]}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=seminar
+            org.opencontainers.image.description=seminar runtime image
+            org.opencontainers.image.created=${{ github.run_id }}
+
+      - name: Publish digest summary
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_NAME="${{ steps.meta.outputs.image_name }}"
+          DIGEST="${{ steps.build.outputs.digest }}"
+          IMAGE_REF="${IMAGE_NAME}@${DIGEST}"
+          if [[ -z "${DIGEST}" ]]; then
+            echo "build digest is empty"
+            exit 1
+          fi
+
+          echo "image_ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${IMAGE_REF}" > ghcr-image-ref.txt
+          {
+            echo "### GHCR Publish"
+            echo "- image: \`${IMAGE_NAME}\`"
+            echo "- digest: \`${DIGEST}\`"
+            echo "- pinned reference: \`${IMAGE_REF}\`"
+            echo "- build_id: \`${{ steps.meta.outputs.build_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghcr-image-ref
+          path: ghcr-image-ref.txt
 
   deploy:
     runs-on: ubuntu-latest
@@ -185,3 +302,134 @@ jobs:
 
           echo "Deployed release: $RELEASE_DIR"
           EOF
+
+  deploy_docker_smoke:
+    runs-on: ubuntu-latest
+    needs: docker_publish
+    timeout-minutes: 30
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_docker_smoke_deploy == 'true')
+    env:
+      SSH_HOST: ${{ secrets.VPS_HOST }}
+      SSH_USER: ${{ secrets.VPS_SSH_USER }}
+      SSH_PORT: ${{ vars.VPS_SSH_PORT || '22' }}
+      SSH_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      SEMINAR_IMAGE_REF: ${{ needs.docker_publish.outputs.image_ref }}
+      EXPECTED_DIGEST: ${{ needs.docker_publish.outputs.digest }}
+      BUILD_ID: ${{ needs.docker_publish.outputs.build_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload seminar smoke compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/id_ed25519 -P "$SSH_PORT" \
+            ops/platform/seminar/compose.seminar.ghcr-smoke.yml \
+            "$SSH_USER@$SSH_HOST:/opt/seminar/compose.seminar.ghcr-smoke.yml"
+
+      - name: Deploy and verify docker smoke on VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "SEMINAR_IMAGE='${SEMINAR_IMAGE_REF}' EXPECTED_DIGEST='${EXPECTED_DIGEST}' BUILD_ID='${BUILD_ID}' bash -se" <<'EOF'
+          set -euo pipefail
+
+          docker network inspect edge >/dev/null
+          docker pull "${SEMINAR_IMAGE}"
+
+          install -d -m 750 /opt/seminar/parity-data
+
+          SEMINAR_IMAGE="${SEMINAR_IMAGE}" BUILD_ID="${BUILD_ID}" \
+            docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml up -d --remove-orphans
+
+          for i in $(seq 1 60); do
+            HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app)"
+            if [[ "${HEALTH}" == "healthy" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          HEALTH_FINAL="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app)"
+          if [[ "${HEALTH_FINAL}" != "healthy" ]]; then
+            docker ps --filter name=seminar-app
+            docker logs --tail 200 seminar-app || true
+            echo "seminar-app health is ${HEALTH_FINAL}"
+            exit 1
+          fi
+
+          RUNTIME_IMAGE="$(docker inspect -f '{{.Config.Image}}' seminar-app)"
+          if [[ "${RUNTIME_IMAGE}" != "${SEMINAR_IMAGE}" ]]; then
+            echo "runtime image mismatch: ${RUNTIME_IMAGE} vs ${SEMINAR_IMAGE}"
+            exit 1
+          fi
+          RUNTIME_DIGEST="${RUNTIME_IMAGE##*@}"
+          if [[ "${RUNTIME_DIGEST}" != "${EXPECTED_DIGEST}" ]]; then
+            echo "runtime digest mismatch: ${RUNTIME_DIGEST} vs ${EXPECTED_DIGEST}"
+            exit 1
+          fi
+
+          RUNTIME_BUILD_ID="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app | sed -n 's/^BUILD_ID=//p' | head -n1)"
+          if [[ "${RUNTIME_BUILD_ID}" != "${BUILD_ID}" ]]; then
+            echo "build_id mismatch: ${RUNTIME_BUILD_ID} vs ${BUILD_ID}"
+            exit 1
+          fi
+
+          OBS_SOURCE="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app | sed -n 's/^OBS_LOG_SOURCE=//p' | head -n1)"
+          if [[ "${OBS_SOURCE}" != "docker" ]]; then
+            echo "OBS_LOG_SOURCE mismatch: ${OBS_SOURCE}"
+            exit 1
+          fi
+
+          ROOT_CODE="$(curl -sS -o /tmp/seminar-docker-root.out -w '%{http_code}' -H 'Host: seminar-ai.ru' http://127.0.0.1:18080/)"
+          HEALTH_CODE="$(curl -sS -o /tmp/seminar-docker-health.out -w '%{http_code}' -H 'Host: seminar-ai.ru' http://127.0.0.1:18080/api/healthz)"
+          ADMIN_SECRET="$(grep -E '^ADMIN_SECRET=' /etc/seminar/seminar.docker.env | head -n1 | cut -d= -f2-)"
+          SINCE="$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          OBS_CODE="$(curl -sS -o /tmp/seminar-docker-obs.out -w '%{http_code}' -H 'Host: seminar-ai.ru' -H "X-Admin-Secret: ${ADMIN_SECRET}" "http://127.0.0.1:18080/admin/obs/logs?since=${SINCE}&limit=20")"
+
+          if [[ "${ROOT_CODE}" != "200" || "${HEALTH_CODE}" != "200" || "${OBS_CODE}" != "200" ]]; then
+            echo "smoke failed root=${ROOT_CODE} health=${HEALTH_CODE} obs=${OBS_CODE}"
+            docker logs --tail 200 seminar-app || true
+            exit 1
+          fi
+
+          JOURNAL_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app 2>&1 | grep -c 'spawn journalctl ENOENT' || true)"
+          DOCKER_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app 2>&1 | grep -c 'spawn docker ENOENT' || true)"
+          if [[ "${JOURNAL_ENOENT_COUNT}" != "0" || "${DOCKER_ENOENT_COUNT}" != "0" ]]; then
+            echo "enoent signatures detected: journalctl=${JOURNAL_ENOENT_COUNT} docker=${DOCKER_ENOENT_COUNT}"
+            exit 1
+          fi
+
+          echo "runtime_image=${RUNTIME_IMAGE}"
+          echo "container_id=$(docker inspect -f '{{.Id}}' seminar-app)"
+          echo "smoke_root=${ROOT_CODE}"
+          echo "smoke_health=${HEALTH_CODE}"
+          echo "smoke_obs=${OBS_CODE}"
+          echo "enoent_journalctl=${JOURNAL_ENOENT_COUNT}"
+          echo "enoent_docker=${DOCKER_ENOENT_COUNT}"
+          EOF
+
+      - name: Job summary
+        shell: bash
+        run: |
+          {
+            echo "### Docker Smoke Deploy"
+            echo "- pinned image: \`${SEMINAR_IMAGE_REF}\`"
+            echo "- expected digest: \`${EXPECTED_DIGEST}\`"
+            echo "- build_id: \`${BUILD_ID}\`"
+            echo "- smoke host: \`127.0.0.1:18080\` with \`Host: seminar-ai.ru\`"
+          } >> "$GITHUB_STEP_SUMMARY"
