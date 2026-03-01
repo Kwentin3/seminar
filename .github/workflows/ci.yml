@@ -351,6 +351,21 @@ jobs:
           docker network inspect edge >/dev/null
           docker pull "${SEMINAR_IMAGE}"
 
+          export APP_ROUTER_NAME="seminar"
+          export APP_HOST_RULE='Host(`seminar-ai.ru`) || Host(`www.seminar-ai.ru`)'
+          export APP_SERVICE_PORT="8787"
+          export TRAEFIK_CERTRESOLVER="le"
+          export TRAEFIK_ENTRYPOINTS_WEB="web"
+          export TRAEFIK_ENTRYPOINTS_WEBSECURE="websecure"
+          export APP_ENABLE_WWW_REDIRECT="1"
+          export APP_WWW_REDIRECT_TO="seminar-ai.ru"
+          export APP_MIDDLEWARES="seminar-www-redirect"
+
+          docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml config > /tmp/seminar-smoke.effective.yml
+          grep -n "traefik.http.routers.${APP_ROUTER_NAME}-web.rule" /tmp/seminar-smoke.effective.yml
+          grep -n "traefik.http.routers.${APP_ROUTER_NAME}-websecure.tls.certresolver" /tmp/seminar-smoke.effective.yml
+          grep -n "traefik.http.services.${APP_ROUTER_NAME}-svc.loadbalancer.server.port" /tmp/seminar-smoke.effective.yml
+
           install -d -m 750 /opt/seminar/parity-data
           if docker ps -a --format '{{.Names}}' | grep -qx 'seminar-app'; then
             docker rm -f seminar-app

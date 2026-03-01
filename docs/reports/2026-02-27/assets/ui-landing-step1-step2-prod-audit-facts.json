@@ -1,0 +1,52 @@
+﻿{
+    "captured_at":  "2026-02-27T18:46:21.8672690Z",
+    "url":  "https://seminar-ai.ru",
+    "dom_counts":  {
+                       "section_hero":  1,
+                       "section_roles":  1,
+                       "tablist":  1,
+                       "tabpanel":  1
+                   },
+    "hero_contains":  {
+                          "tablist":  false,
+                          "tabpanel":  false
+                      },
+    "bundle_compare":  {
+                           "production_js":  "/assets/index-CHDSPSAN.js",
+                           "local_js":  "/assets/index-CHDSPSAN.js",
+                           "js_match":  true,
+                           "production_css":  "/assets/index-C9KrtWKp.css",
+                           "local_css":  "/assets/index-C9KrtWKp.css",
+                           "css_match":  true
+                       },
+    "headers":  {
+                    "root":  [
+                                 "HTTP/1.1 200 OK",
+                                 "Server: nginx/1.18.0",
+                                 "Date: Fri, 27 Feb 2026 18:46:20 GMT",
+                                 "Content-Type: text/html; charset=UTF-8",
+                                 "Content-Length: 391",
+                                 "Connection: keep-alive",
+                                 "X-Powered-By: Express",
+                                 "Accept-Ranges: bytes",
+                                 "Cache-Control: public, max-age=0",
+                                 "Last-Modified: Fri, 27 Feb 2026 18:29:07 GMT",
+                                 "ETag: W/\"187-19ca05c9415\"",
+                                 ""
+                             ],
+                    "js":  [
+                               "HTTP/1.1 200 OK",
+                               "Server: nginx/1.18.0",
+                               "Date: Fri, 27 Feb 2026 18:46:21 GMT",
+                               "Content-Type: application/javascript; charset=UTF-8",
+                               "Content-Length: 298321",
+                               "Connection: keep-alive",
+                               "X-Powered-By: Express",
+                               "Accept-Ranges: bytes",
+                               "Cache-Control: public, max-age=0",
+                               "Last-Modified: Fri, 27 Feb 2026 18:29:07 GMT",
+                               "ETag: W/\"48d51-19ca05c9419\"",
+                               ""
+                           ]
+                }
+}

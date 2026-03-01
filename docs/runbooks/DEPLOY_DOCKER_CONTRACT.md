@@ -1,7 +1,7 @@
 # Deploy Docker Contract (Platform + Seminar)
 
 ## Purpose
-Определяет атомарный deploy/rollback контракт для Docker-платформы без `systemctl restart seminar`.
+Определяет canonical атомарный deploy/rollback контракт для production Docker-платформы.
 
 ## Scope
 - Platform edge stack (Traefik)
@@ -15,6 +15,9 @@
 5. Artifact identity MUST быть зафиксирован до deploy (`commit_sha` + expected `image_digest` + `BUILD_ID`).
 6. `OBS_LOG_SOURCE` MUST быть выставлен явно (`docker` для docker runtime), fallback запрещён.
 7. Production deploy MUST использовать только pinned digest image reference (`ghcr.io/...@sha256:<digest>`), `latest` запрещён.
+8. Traefik domain routing MUST быть задан на service labels (attachment compose), не на Traefik service.
+9. `APP_HOST_RULE`, `TRAEFIK_CERTRESOLVER`, `TRAEFIK_ENTRYPOINTS_WEB`, `TRAEFIK_ENTRYPOINTS_WEBSECURE`, `APP_SERVICE_PORT` MUST быть заданы явно для production attachment.
+10. Production deploy Docker-only: `systemctl restart seminar` и legacy release path запрещены вне rollback.
 
 ## Atomic Roll-Forward Contract
 1. Pull images:
@@ -45,6 +48,13 @@ Expected:
 - `BUILD_ID=<expected_build_id>`;
 - `OBS_LOG_SOURCE=docker`;
 - no `spawn journalctl ENOENT` / `spawn docker ENOENT` in recent logs.
+7. Run routing parity check (MUST pass before cutover):
+```bash
+docker compose --env-file <app_env_file> -f <app_stack>.yml config > /tmp/<app>.effective.yml
+grep -n "traefik.http.routers.<router>-web.rule" /tmp/<app>.effective.yml
+grep -n "traefik.http.routers.<router>-websecure.tls.certresolver" /tmp/<app>.effective.yml
+grep -n "traefik.http.services.<router>-svc.loadbalancer.server.port" /tmp/<app>.effective.yml
+```
 
 ## Atomic Rollback Contract
 1. Keep previous immutable image tag and compose revision.
@@ -56,13 +66,15 @@ using previous locked tags/config.
 3. Re-run smoke gate.
 4. If rollback smoke fails, switch edge back to previous known-good owner.
 
-## CI/CD Transition Rules
-- Legacy deploy flow (SSH + `systemctl restart seminar`) remains active until Docker production cutover is accepted.
-- Docker deploy workflow MUST be introduced in parallel and promoted only after:
-  1. platform smoke pass;
-  2. seminar container smoke pass;
-  3. backup/restore contract gate closed;
-  4. OBS log retrieval policy gate closed.
+## CI/CD Runtime Rules
+1. Production release flow использует только Docker deployment workflow (Mode A).
+2. Legacy `systemd + nginx` flow допускается только для rollback и не может быть default pipeline.
+3. Public cutover выполняется только после:
+   - platform smoke pass,
+   - seminar container smoke pass,
+   - backup/restore contract gate closed,
+   - OBS log retrieval policy gate closed,
+   - artifact parity pass.
 
 ## Artifact Parity Guard (Release Drift Prevention)
 Mode A (mandatory for production):

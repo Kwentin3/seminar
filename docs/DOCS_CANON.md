@@ -8,9 +8,18 @@
 Базовый контекст проекта, на который опираются документы:
 
 1. Единственный доверенный публичный домен проекта: `https://seminar-ai.ru/`; RU/EN переключается через UI.
-2. UX-направление: mobile-first, минималистичный "цифровой детокс", мягкие эффекты.
-3. Инженерный подход: слои, контракты, изоляция, тестируемые модули, минимизация расползания контекста.
-4. Процесс: обсуждение -> промпт агенту -> отчет агента -> аудит -> следующий шаг.
+2. Production baseline (с `2026-03-01`): Docker runtime + Traefik edge + GHCR pinned digest deployment.
+3. Legacy `systemd + nginx` является deprecated и используется только как rollback-only path.
+4. Инженерный подход: слои, контракты, изоляция, тестируемые модули, минимизация расползания контекста.
+5. Процесс: обсуждение -> промпт агенту -> отчет агента -> аудит -> следующий шаг.
+
+## A1) Production Runtime Model (Docker Canon)
+1. Production runtime MUST be Docker + Traefik.
+2. Production deploy MUST use GHCR pinned digest.
+3. Legacy `systemd + nginx` MUST be treated as rollback-only.
+
+AGENT MUST ASSUME:
+Production = Docker + Traefik + GHCR pinned digest.
 
 ## B) Narrow Context Core
 Короткое ядро контекста (держать 3-6 позиций):
@@ -19,7 +28,9 @@
 2. `docs/ARCHITECTURE/CONTEXT_GOVERNANCE.md` - правила изменения контекста и B-Light.
 3. `docs/prd/PRD-PHASE-1.LANDING.md` - продуктовый источник истины для текущей фазы.
 4. `docs/ARCHITECTURE/NORTH_STAR.md` - стратегические инварианты проекта.
-5. `docs/templates/DOC_TEMPLATE.md` - универсальный шаблон с обязательной шапкой.
+5. `docs/infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md` - canonical OPS baseline.
+6. `docs/runbooks/DEPLOY_DOCKER_CONTRACT.md` - deploy/cutover anti-drift contract.
+7. `docs/templates/DOC_TEMPLATE.md` - универсальный шаблон с обязательной шапкой.
 
 ## C) Document Types (Taxonomy)
 | Type | Назначение | Обязательные секции (минимум) |
@@ -42,6 +53,7 @@
 | CONTRACT | `docs/contracts/` | `docs/contracts/CONTRACT-002.ai.llm-gateway.v0.3.md` |
 | REPORT | `docs/reports/YYYY-MM-DD/` | `docs/reports/2026-02-26/DOCS.canon.bootstrap.report.md` |
 | RUNBOOK | `docs/runbooks/` | `docs/runbooks/RUNBOOK-001.ops.release-check.v1.0.md` |
+| INFRA-OPS | `docs/infra-ops/` | `docs/infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md` |
 | ARTIFACT | `docs/artifacts/` | `docs/artifacts/ARTIFACT-2026-02-26.search-schema.v1.json` |
 | TEMPLATE | `docs/templates/` | `docs/templates/DOC_TEMPLATE.md` |
 

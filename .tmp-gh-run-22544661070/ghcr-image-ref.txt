@@ -1,0 +1,1 @@
+ghcr.io/kwentin3/seminar@sha256:c24f0cd69fd8c4c319b7f4067ecf2f67c28c3cde39bcc718a7df8f62fbb48356

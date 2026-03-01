@@ -1,4 +1,4 @@
-name: seminar-ghcr-smoke
+name: seminar-ghcr-prod
 
 services:
   seminar-app:
@@ -13,8 +13,9 @@ services:
       OBS_DOCKER_CONTAINER: "seminar-app"
       OBS_DOCKER_BIN: "/usr/bin/docker"
       BUILD_ID: ${BUILD_ID:?BUILD_ID is required}
+      DATABASE_PATH: "/var/lib/seminar/seminar.sqlite"
     volumes:
-      - /opt/seminar/parity-data:/var/lib/seminar
+      - ${SEMINAR_DATA_DIR:?SEMINAR_DATA_DIR is required}:/var/lib/seminar
       - /usr/bin/docker:/usr/bin/docker:ro
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

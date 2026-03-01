@@ -7,6 +7,7 @@ Workflow: `.github/workflows/ci.yml`
 Triggers:
 - `pull_request` (any branch)
 - `push` to `main`
+- `workflow_dispatch` (manual ops runs)
 
 CI runs:
 1. `pnpm install --frozen-lockfile`
@@ -16,31 +17,33 @@ CI runs:
 5. Smoke leads in mock mode:
    - `pnpm run start:vps` (background)
    - `pnpm run test:smoke:leads`
-6. Publish Docker image to GHCR (on `push` and manual dispatch):
+6. Publish Docker image to GHCR:
    - canonical image: `ghcr.io/kwentin3/seminar`
    - tags: `sha-<shortsha>` and `main` (for `main`)
    - CI summary exports pinned digest reference
-7. Deploy to VPS (legacy, only on `push` to `main`, after green CI):
-   - upload release archive via SSH key
-   - build on VPS
-   - switch `/var/www/seminar/current` symlink
-   - restart `seminar.service`
-   - smoke `http://127.0.0.1:8787/` and `/api/healthz`
-8. Deploy Docker smoke on VPS by pinned digest (parallel, without public cutover):
+7. Deploy Docker smoke on VPS by pinned digest (without public edge switch):
    - pull `ghcr.io/kwentin3/seminar@sha256:<digest>`
    - run smoke through Traefik smoke bind `127.0.0.1:18080`
    - mandatory `/admin/obs/logs` check with `OBS_LOG_SOURCE=docker`
 
-Note:
-- Production runtime is VPS (`server/index.mjs` + `nginx` + `systemd`) and is deployed via runbook.
-- Trusted public domain for this project is only `https://seminar-ai.ru/`.
-- Public edge `:80/:443` ownership is unchanged in docker smoke flow.
+Production policy:
+- Production deploy is Docker-only.
+- Pinned digest is mandatory.
+- Legacy `systemd + nginx` flow is rollback-only.
+- Any legacy deploy job in CI is transitional and rollback-only.
+
+## Forbidden For Production Flow
+
+1. `latest` image tags.
+2. Deploy by mutable tag without digest parity check.
+3. `systemctl restart seminar` as a release step.
+4. Public cutover before smoke and parity gates are green.
 
 ## Required Secrets/Variables For Deploy
 
 Repository secrets:
 1. `VPS_HOST` - VPS IP/FQDN.
-2. `VPS_SSH_USER` - SSH user for deploy (recommended dedicated deploy user).
+2. `VPS_SSH_USER` - SSH user for deploy.
 3. `VPS_SSH_PRIVATE_KEY` - private key (PEM/OpenSSH) matching authorized key on VPS.
 4. `VPS_KNOWN_HOSTS` - known_hosts line for VPS host key.
 
@@ -51,10 +54,6 @@ Workflow permissions baseline:
 1. Default workflow permission: `contents: read`.
 2. GHCR publish job requires: `packages: write` (using `GITHUB_TOKEN`).
 3. PAT is not required when package is published by repository workflow with `packages: write`.
-
-Current operational policy (updated `2026-02-27`):
-- Deploy access is key-based only.
-- Root password authentication is not part of deploy flow.
 
 ## Branching Rules
 
@@ -91,5 +90,5 @@ Common actions:
 2. Commit only template files (`*.example`, e.g. `.dev.vars.example`, `.env.example`).
 3. Real secrets live only in:
    - GitHub repository/environment secrets (if needed)
-   - VPS env file (`/etc/seminar/seminar.env`) for production
+   - VPS env files (outside repository)
 4. If a real secret is committed by mistake: rotate immediately and remove from history.

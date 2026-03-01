@@ -1,3 +1,10 @@
+⚠️ LEGACY DEPLOY (systemd + nginx) — DEPRECATED
+
+Production baseline since 2026-03-01:
+Docker + Traefik + GHCR pinned digest.
+
+Legacy flow allowed only for rollback scenarios.
+
 # Go Live Runbook (JustHost VPS)
 
 ## Purpose
@@ -8,6 +15,10 @@ Repeatable production deployment checklist for `seminar` on a single VPS runtime
 - `nginx` reverse proxy
 - `fail2ban` protection
 - Let's Encrypt TLS
+
+Current status:
+- This runbook is retained for rollback operations only.
+- Canonical production deploy path is defined in `docs/runbooks/DEPLOY_DOCKER_CONTRACT.md`.
 
 ## Current Production Baseline
 

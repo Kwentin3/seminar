@@ -1,0 +1,65 @@
+name: platform-edge-smoke
+
+services:
+  traefik:
+    image: traefik:v3.5
+    container_name: platform-edge-smoke-traefik
+    environment:
+      DOCKER_API_VERSION: "1.44"
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --ping=true
+      - --ping.entryPoint=web
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --api.dashboard=false
+      - --api.insecure=false
+      - --log.level=INFO
+      - --log.format=json
+      - --accesslog=true
+      - --accesslog.format=json
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - ${SMOKE_HTTP_BIND:?SMOKE_HTTP_BIND is required}:${SMOKE_HTTP_PORT:?SMOKE_HTTP_PORT is required}:80
+      - ${SMOKE_HTTPS_BIND:?SMOKE_HTTPS_BIND is required}:${SMOKE_HTTPS_PORT:?SMOKE_HTTPS_PORT is required}:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${ACME_STORAGE_FILE:?ACME_STORAGE_FILE is required}:/acme/acme.json
+    networks:
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ping >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  edge-smoke:
+    image: traefik/whoami:v1.11.0
+    container_name: platform-edge-smoke-service
+    networks:
+      - edge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.edge-smoke.rule=Host(`${SMOKE_HOST:?SMOKE_HOST is required}`)
+      - traefik.http.routers.edge-smoke.entrypoints=web
+      - traefik.http.routers.edge-smoke.service=edge-smoke
+      - traefik.http.services.edge-smoke.loadbalancer.server.port=80
+    restart: unless-stopped
+
+networks:
+  edge:
+    external: true
+    name: edge

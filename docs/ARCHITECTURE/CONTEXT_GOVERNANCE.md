@@ -4,7 +4,7 @@ status: draft
 owner: @Kwentin3
 approved_by:
   - @Kwentin3
-last_updated: 2026-02-27
+last_updated: 2026-03-01
 core_snapshot: n/a
 related:
   - docs/DOCS_CANON.md
@@ -51,6 +51,7 @@ tags:
 2. `docs/prd/PRD.md` - источник продуктовых требований (planned, пока отсутствует в репозитории).
 3. `docs/ARCHITECTURE/NORTH_STAR.md` - стратегический вектор и инварианты.
 4. `docs/ARCHITECTURE/CONTEXT_GOVERNANCE.md` - данный регламент изменений.
+5. `docs/infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md` - canonical production baseline и anti-drift инварианты.
 
 Любой документ вне списка ядром не является.
 
@@ -82,6 +83,7 @@ ADR обязателен при любом из критериев:
 4. Меняются правила мультиязычности/доменного инварианта (`https://seminar-ai.ru/`).
 5. Решение влияет более чем на один эпик или более чем на один домен.
 6. Изменение трудно откатить без миграции или простоя.
+7. Изменяются инварианты production baseline (Docker + Traefik + pinned digest).
 
 ## 6) Epic Boundaries
 Правила:
@@ -134,3 +136,13 @@ ADR обязателен при любом из критериев:
 - `Context`: "Нужно разделить лендинг и кабинет по разным pipeline."
 - `Decision`: "Вводим отдельные deployment jobs."
 - `Consequences`: "Больше конфигурации CI, но меньше связности релизов."
+
+## 9) Production Baseline Governance
+Инварианты production runtime фиксируются в `docs/infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md` и обязательны для OPS-изменений:
+
+1. Production deploy выполняется только через Docker runtime по pinned digest.
+2. Public edge owner для `:80/:443` - Traefik.
+3. Legacy `systemd + nginx` разрешен только как rollback path.
+4. Команда `systemctl restart seminar` запрещена для штатного production deploy.
+
+Нарушение любого пункта трактуется как `STOP_CONTRACT_CONFLICT`.

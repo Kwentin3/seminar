@@ -4,7 +4,7 @@ status: draft
 owner: @Kwentin3
 approved_by:
   - @Kwentin3
-last_updated: 2026-02-26
+last_updated: 2026-03-01
 core_snapshot: n/a
 related:
   - docs/ARCHITECTURE/CONTEXT_GOVERNANCE.md
@@ -64,3 +64,16 @@ tags:
 - **Low-Hanging Fruit Priority:** в приоритете решения с максимальным эффектом при минимальной сложности.
 - **Isolation First:** каждый новый компонент внедряется так, чтобы его можно было тестировать отдельно.
 - **Reversible Decisions:** предпочтение решениям, которые можно заменить без полного рефакторинга системы.
+
+## 8) Production Delivery Invariants (Docker Baseline)
+- Публичный production контур обслуживается только Docker runtime + Traefik edge.
+- Production deploy выполняется только из GHCR pinned digest (`image@sha256`); `latest` запрещен.
+- Edge ownership для `:80/:443` принадлежит Traefik, доменные правила задаются только на labels сервисов.
+- Legacy `systemd + nginx` сохраняется как rollback-only режим и не используется для штатного релиза.
+- Operational contract-first: backup SLA и OBS source policy обязательны до любого cutover.
+
+## 9) Production Runtime Model (Docker Canon)
+1. Production MUST run on Docker + Traefik only.
+2. Deploy MUST use GHCR pinned digest only.
+3. Legacy `systemd + nginx` MUST be treated as rollback-only.
+4. Any deviation from this model is a contract conflict.
