@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 import readline from "node:readline";
+import { Readable } from "node:stream";
 
 const LEVELS = ["debug", "info", "warn", "error"];
 const LEVEL_SET = new Set(LEVELS);
@@ -173,18 +174,25 @@ async function streamCommandEvents({
   let aborted = false;
   const stderrChunks = [];
 
-  spawnedProcess.stderr.on("data", (chunk) => {
-    stderrChunks.push(String(chunk));
-  });
+  if (spawnedProcess.stderr) {
+    spawnedProcess.stderr.on("data", (chunk) => {
+      stderrChunks.push(String(chunk));
+    });
+  }
 
   const closePromise = new Promise((resolve) => {
     spawnedProcess.once("close", (code, processSignal) => {
-      resolve({ code, processSignal });
+      resolve({ code, processSignal, error: null });
+    });
+  });
+  const spawnErrorPromise = new Promise((resolve) => {
+    spawnedProcess.once("error", (error) => {
+      resolve({ code: null, processSignal: null, error });
     });
   });
 
   const lineReader = readline.createInterface({
-    input: spawnedProcess.stdout,
+    input: spawnedProcess.stdout ?? Readable.from([]),
     crlfDelay: Infinity
   });
 
@@ -243,12 +251,20 @@ async function streamCommandEvents({
     }
   } finally {
     lineReader.close();
-    if (!spawnedProcess.killed) {
+    if (!spawnedProcess.killed && spawnedProcess.pid) {
       spawnedProcess.kill("SIGTERM");
     }
   }
 
-  const exit = await closePromise;
+  const exit = await Promise.race([closePromise, spawnErrorPromise]);
+  if (exit.error) {
+    throw new ObsLogRetrievalError(`${source} retrieval failed: ${exit.error.message}`, {
+      code: "obs_source_unavailable",
+      status: 500,
+      details: { source }
+    });
+  }
+
   const code = typeof exit.code === "number" ? exit.code : 1;
   if (!stoppedByLimit && !stoppedByBudget && !aborted && code !== 0) {
     const stderr = stderrChunks.join("").trim();
