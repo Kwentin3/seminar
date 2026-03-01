@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { hashCanonicalJson } from "../obs/canonical-json.mjs";
+// This module implements content/landing minimum-set OBS events
+// required by CONTRACT-OBS-001 (Phase 1 baseline).
+// DO NOT use console.log for runtime events.
+// Use server/obs/logger.mjs instead (CONTRACT-OBS-001).
 
 const defaultLandingContentFiles = {
   manifest: "content/landing/manifest.v1.json",

@@ -5,9 +5,19 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { parsePhoneNumberFromString } from "libphonenumber-js/max";
+// DO NOT use console.log for runtime events.
+// Use server/obs/logger.mjs instead (CONTRACT-OBS-001).
 import { logger } from "./obs/logger.mjs";
 import { createRequestContextMiddleware } from "./obs/request-context.mjs";
-import { parseObsLevel, parseObsLimit, streamJournaldEvents } from "./obs/log-retrieval.mjs";
+import {
+  ObsLogRetrievalError,
+  parseObsHardCapBytes,
+  parseObsHardCapLines,
+  parseObsLevel,
+  parseObsLimit,
+  parseObsSource,
+  streamObsEvents
+} from "./obs/log-retrieval.mjs";
 import { observeLandingRequest } from "./landing/content-observability.mjs";
 
 const COUNTRY_REQUIRED_CODE = "country_required";
@@ -366,52 +376,107 @@ app.get("/admin/obs/logs", async (request, response) => {
     });
     const requestId = readString(request.query.request_id);
     const until = readString(request.query.until);
+    const source = parseObsSource(process.env.OBS_LOG_SOURCE, { required: true });
+    if (!source) {
+      throw new ObsLogRetrievalError("OBS_LOG_SOURCE must be explicitly configured", {
+        code: "obs_source_invalid",
+        status: 500
+      });
+    }
+    const hardCapLines = parseObsHardCapLines(process.env.OBS_LOG_HARD_CAP_LINES);
+    const hardCapBytes = parseObsHardCapBytes(process.env.OBS_LOG_HARD_CAP_BYTES);
     const abortController = new AbortController();
     request.once("close", () => {
       abortController.abort();
     });
-    let responseStarted = false;
-    const ensureStreamingResponse = () => {
-      if (responseStarted) {
-        return;
+    logger.info({
+      event: "obs_log_source_selected",
+      domain: "obs",
+      module: "admin/obs-logs-handler",
+      payload: {
+        source,
+        limit,
+        hard_cap_lines: hardCapLines,
+        hard_cap_bytes: hardCapBytes
       }
-      responseStarted = true;
-      response.status(200);
-      response.setHeader("content-type", "application/x-ndjson; charset=utf-8");
-      response.setHeader("cache-control", "no-store");
-      response.flushHeaders();
-    };
-
-    await streamJournaldEvents({
+    });
+    const events = [];
+    const retrieval = await streamObsEvents({
+      source,
       since,
       until,
       level,
       requestId,
       limit,
       signal: abortController.signal,
+      hardCapLines,
+      hardCapBytes,
       onEvent: (event) => {
-        ensureStreamingResponse();
-        response.write(`${JSON.stringify(event)}\n`);
+        events.push(event);
       }
     });
 
-    ensureStreamingResponse();
+    if (abortController.signal.aborted) {
+      return undefined;
+    }
+
+    logger.info({
+      event: "obs_log_retrieval_completed",
+      domain: "obs",
+      module: "admin/obs-logs-handler",
+      payload: {
+        source: retrieval.source,
+        emitted_count: retrieval.emitted_count,
+        emitted_bytes: retrieval.emitted_bytes,
+        hard_cap_lines: retrieval.hard_cap_lines,
+        hard_cap_bytes: retrieval.hard_cap_bytes
+      }
+    });
+
+    response.status(200);
+    response.setHeader("content-type", "application/x-ndjson; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
+    for (const event of events) {
+      response.write(`${JSON.stringify(event)}\n`);
+    }
     response.end();
     return undefined;
   } catch (error) {
+    const retrievalFailure = normalizeObsRetrievalFailure(error);
+    if (retrievalFailure.code === "obs_budget_exceeded") {
+      logger.warn({
+        event: "obs_log_retrieval_limited",
+        domain: "obs",
+        module: "admin/obs-logs-handler",
+        duration_ms: elapsedMs(startedAt),
+        payload: {
+          status_code: retrievalFailure.status,
+          reason: retrievalFailure.code,
+          details: retrievalFailure.details
+        },
+        error: createObsError(
+          "obs.log_budget_exceeded",
+          "validation",
+          false,
+          "obs",
+          "obs log retrieval exceeded configured budget"
+        )
+      });
+    }
+
     logger.error({
       event: "admin_action_failed",
       domain: "admin",
       module: "admin/obs-logs-handler",
       duration_ms: elapsedMs(startedAt),
-      payload: { status_code: 500, endpoint: "/admin/obs/logs" },
+      payload: { status_code: retrievalFailure.status, endpoint: "/admin/obs/logs" },
       error: createObsError("admin.obs_logs_failed", "internal", true, "infra", "obs log retrieval failed")
     });
 
     if (!response.headersSent) {
-      return jsonError(response, 500, {
-        code: "internal_error",
-        message: "Unexpected server error."
+      return jsonError(response, retrievalFailure.status, {
+        code: retrievalFailure.code,
+        message: retrievalFailure.message
       });
     }
 
@@ -898,6 +963,53 @@ function createObsError(code, category, retryable, origin, message) {
     retryable,
     origin,
     message: readString(message) ?? "operation failed"
+  };
+}
+
+function normalizeObsRetrievalFailure(error) {
+  if (error instanceof ObsLogRetrievalError) {
+    if (error.code === "obs_invalid_input") {
+      return {
+        status: error.status,
+        code: "invalid_input",
+        message: error.message,
+        details: error.details ?? null
+      };
+    }
+
+    if (error.code === "obs_budget_exceeded") {
+      return {
+        status: 413,
+        code: "obs_budget_exceeded",
+        message: "OBS log retrieval exceeded configured budget.",
+        details: error.details ?? null
+      };
+    }
+
+    if (error.code === "obs_source_invalid") {
+      return {
+        status: 500,
+        code: "internal_error",
+        message: "OBS_LOG_SOURCE must be set to journald or docker.",
+        details: error.details ?? null
+      };
+    }
+
+    if (error.code === "obs_source_unavailable") {
+      return {
+        status: 500,
+        code: "internal_error",
+        message: "OBS log source is unavailable.",
+        details: error.details ?? null
+      };
+    }
+  }
+
+  return {
+    status: 500,
+    code: "internal_error",
+    message: "Unexpected server error.",
+    details: null
   };
 }
 

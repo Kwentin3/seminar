@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import process from "node:process";
-import { parseObsLevel, streamJournaldEvents } from "../../server/obs/log-retrieval.mjs";
+import { parseObsLevel, parseObsSource, streamObsEvents } from "../../server/obs/log-retrieval.mjs";
 
 function readString(value) {
   if (typeof value !== "string") {
@@ -27,9 +27,11 @@ function parseArgs(argv) {
       key === "--since" ||
       key === "--until" ||
       key === "--level" ||
+      key === "--source" ||
       key === "--request-id" ||
       key === "--limit" ||
-      key === "--service"
+      key === "--service" ||
+      key === "--container"
     ) {
       parsed[key.slice(2)] = value;
       index += 1;
@@ -40,7 +42,7 @@ function parseArgs(argv) {
 
 function printUsage() {
   process.stderr.write(
-    "Usage: node scripts/obs/logs.mjs --since <iso> --level <debug|info|warn|error> --limit <n> [--until <iso>] [--request-id <id>] [--service <name>]\n"
+    "Usage: node scripts/obs/logs.mjs --since <iso> --level <debug|info|warn|error> --limit <n> [--source <journald|docker>] [--until <iso>] [--request-id <id>] [--service <name>] [--container <name>]\n"
   );
 }
 
@@ -58,8 +60,9 @@ async function main() {
   const since = readString(args.since);
   const limitRaw = readString(args.limit);
   const level = parseObsLevel(args.level, { required: true });
+  const source = parseObsSource(args.source ?? process.env.OBS_LOG_SOURCE, { required: true });
 
-  if (!since || !limitRaw || !level) {
+  if (!since || !limitRaw || !level || !source) {
     printUsage();
     process.exitCode = 1;
     return;
@@ -74,8 +77,10 @@ async function main() {
   const limit = Math.min(limitParsed, 2000);
 
   try {
-    await streamJournaldEvents({
+    await streamObsEvents({
+      source,
       service: args.service,
+      container: args.container,
       since,
       until: args.until,
       level,

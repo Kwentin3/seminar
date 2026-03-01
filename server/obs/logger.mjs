@@ -1,3 +1,15 @@
+/**
+ * OBS BASELINE (CONTRACT-OBS-001 v0.4)
+ *
+ * Invariants:
+ * - logger MUST NEVER throw
+ * - redaction-by-default
+ * - strict 4KB cap (full event)
+ * - namespaced error.code
+ * - no implicit fallback
+ *
+ * All new features MUST use this logger.
+ */
 import process from "node:process";
 import { getRequestContext } from "./request-context.mjs";
 
