@@ -352,6 +352,9 @@ jobs:
           docker pull "${SEMINAR_IMAGE}"
 
           install -d -m 750 /opt/seminar/parity-data
+          if docker ps -a --format '{{.Names}}' | grep -qx 'seminar-app'; then
+            docker rm -f seminar-app
+          fi
 
           SEMINAR_IMAGE="${SEMINAR_IMAGE}" BUILD_ID="${BUILD_ID}" \
             docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml up -d --remove-orphans
