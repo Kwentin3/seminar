@@ -47,6 +47,11 @@ Repository secrets:
 Repository variables:
 1. `VPS_SSH_PORT` - SSH port (default `22` if omitted).
 
+Workflow permissions baseline:
+1. Default workflow permission: `contents: read`.
+2. GHCR publish job requires: `packages: write` (using `GITHUB_TOKEN`).
+3. PAT is not required when package is published by repository workflow with `packages: write`.
+
 Current operational policy (updated `2026-02-27`):
 - Deploy access is key-based only.
 - Root password authentication is not part of deploy flow.

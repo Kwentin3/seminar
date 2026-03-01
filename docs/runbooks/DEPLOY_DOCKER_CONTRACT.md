@@ -88,6 +88,9 @@ Mode B (emergency-only / dev-only):
    - release tag mirror (for `refs/tags/*`, optional)
 3. Deploy reference MUST always be pinned digest:
    - `ghcr.io/kwentin3/seminar@sha256:<digest>`
+4. Minimum GH permissions for publish:
+   - workflow default: `contents: read`
+   - publish job: `packages: write` (`GITHUB_TOKEN`).
 
 ## How To Take Digest From CI
 1. From workflow summary (`GHCR Publish`) copy `pinned reference`.
