@@ -53,8 +53,8 @@
 
 ## 4. Evidence: GHCR publish + digest
 Primary CI run (PASS):
-- Run URL: `https://github.com/Kwentin3/seminar/actions/runs/22544661070`
-- Head SHA: `5ebd032a1fce6f0f256229bf3ee53b4be0085588`
+- Run URL: `https://github.com/Kwentin3/seminar/actions/runs/22544771309`
+- Head SHA: `dcf5f3483d09b2639e40231293a42f78cbf872c3`
 - Jobs:
   - `ci` -> success
   - `docker_publish` -> success
@@ -62,7 +62,7 @@ Primary CI run (PASS):
   - `deploy` (legacy) -> skipped in workflow_dispatch run
 
 Published pinned reference (artifact `ghcr-image-ref.txt`):
-- `ghcr.io/kwentin3/seminar@sha256:c24f0cd69fd8c4c319b7f4067ecf2f67c28c3cde39bcc718a7df8f62fbb48356`
+- `ghcr.io/kwentin3/seminar@sha256:f17357c27e98897095b7945c5e529b3ed92dffd7d3ec5b47af80063a9744c5d4`
 
 CI publish proof points:
 1. `docker_publish` step `Build and push image` = success.
@@ -72,14 +72,14 @@ CI publish proof points:
 ## 5. Evidence: VPS pull + parity-check + smoke
 Pinned digest pull on VPS:
 ```bash
-docker pull ghcr.io/kwentin3/seminar@sha256:c24f0cd69fd8c4c319b7f4067ecf2f67c28c3cde39bcc718a7df8f62fbb48356
-Digest: sha256:c24f0cd69fd8c4c319b7f4067ecf2f67c28c3cde39bcc718a7df8f62fbb48356
+docker pull ghcr.io/kwentin3/seminar@sha256:f17357c27e98897095b7945c5e529b3ed92dffd7d3ec5b47af80063a9744c5d4
+Digest: sha256:f17357c27e98897095b7945c5e529b3ed92dffd7d3ec5b47af80063a9744c5d4
 Status: Image is up to date
 ```
 
 Parity/smoke evidence from CI `deploy_docker_smoke` logs:
-1. `runtime_image=ghcr.io/kwentin3/seminar@sha256:c24f0cd69fd8c4c319b7f4067ecf2f67c28c3cde39bcc718a7df8f62fbb48356`
-2. `container_id=6df47cd222597aaf2c62b5a032169eed5537ea9c8955e309ed999fa870633520`
+1. `runtime_image=ghcr.io/kwentin3/seminar@sha256:f17357c27e98897095b7945c5e529b3ed92dffd7d3ec5b47af80063a9744c5d4`
+2. `container_id=4780d62debc1e0d02ffa9f5681c496e858f8742ec6ea216d24e24b803aa76ea7`
 3. `smoke_health=200`
 4. `smoke_obs=200`
 5. `enoent_journalctl=0`
