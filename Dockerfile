@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm run build:web && pnpm prune --prod
+RUN pnpm run build:web
 
 FROM node:22-bookworm-slim AS runtime
 
