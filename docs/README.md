@@ -1,40 +1,59 @@
-# Seminar Docs Index
+# Project Docs Map
 
-## Production Runtime Model (Docker Canon)
+## Domain Map
 
-- Canonical baseline since `2026-03-01`.
-- Runtime owner: Docker (`seminar-app`) on VPS.
-- Edge owner: Traefik (`:80/:443`) with explicit host rules per project.
-- Artifact policy: GHCR pinned digest only (`ghcr.io/kwentin3/seminar@sha256:<digest>`).
-- Trusted public domain (canonical): `https://seminar-ai.ru/`
-- Storage: SQLite persistent volume (`/var/lib/seminar/seminar.sqlite` inside runtime contract)
-- Observability: structured logs to stdout, `/admin/obs/logs` with explicit source (`OBS_LOG_SOURCE=docker`)
-- Legacy status: `systemd + nginx` is deprecated and allowed only for rollback.
+Проектовая документация разделена на три зоны:
 
-## Primary Documents
+1. Shared core: общие стратегические, governance и ops-документы.
+2. Landing: документы по лендингу как каналу лидогенерации.
+3. Seminar: документы по образовательной и knowledge-ветке.
 
-1. [Production Baseline: Docker + Traefik](./infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md)
-2. [Deploy Docker Contract](./runbooks/DEPLOY_DOCKER_CONTRACT.md)
-3. [Go Live Runbook (Legacy Rollback Only)](./runbooks/GO_LIVE.md)
-4. [GitHub Guardrails](./runbooks/GITHUB_GUARDRAILS.md)
-5. [Environment Matrix](./runbooks/ENV_MATRIX.md)
-6. [Infrastructure ADR](./adr/ADR-001.infrastructure.baseline.v1.md)
-7. [Documentation Canon](./DOCS_CANON.md)
-8. [Observability Contract: Logging Event Model v0.4](./contracts/CONTRACT-OBS-001.logging.event-model.v0.4.md)
-9. [OBS Log Sources Contract v0.1](./contracts/CONTRACT-OBS-002.log-retrieval-sources.v0.1.md)
-10. [SQLite Backup SLA v0.1](./contracts/CONTRACT-OPS-001.sqlite-backup-sla.v0.1.md)
+## Shared Core
 
-## Observability Quick Links
+- [Deploy Re-entry Truth Map](./notes/NOTE-007.deploy-entrypoints-and-truth-map.md)
+- [Latest Deploy Anamnesis](./reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md)
+- [Architecture Index](./ARCHITECTURE/INDEX.md)
+- [Documentation Canon](./DOCS_CANON.md)
+- [Production Baseline: Docker + Traefik](./infra-ops/PRODUCTION_BASELINE_DOCKER_TRAEFIK.md)
+- [Deploy Docker Contract](./runbooks/DEPLOY_DOCKER_CONTRACT.md)
+- [Environment Matrix](./runbooks/ENV_MATRIX.md)
+- [Legacy Go-Live Runbook (rollback-only)](./runbooks/GO_LIVE.md)
 
-- [CONTRACT-OBS-001.logging-event-model.v0.4](./contracts/CONTRACT-OBS-001.logging.event-model.v0.4.md)
-- [CONTRACT-OBS-002.log-retrieval-sources.v0.1](./contracts/CONTRACT-OBS-002.log-retrieval-sources.v0.1.md)
-- [OBS Log Retrieval Runbook](./runbooks/OBS_LOG_RETRIEVAL.md)
-- [OBS Incident Playbook](./runbooks/OBS_INCIDENT_PLAYBOOK.md)
+## Deploy Re-entry
 
-## Local Developer Flow (Short)
+Read in this order when resuming ops/deploy work in a fresh chat:
 
-1. `pnpm install`
-2. `pnpm run build:web`
-3. Set env (`ADMIN_SECRET` required)
-4. `pnpm run start:vps`
-5. Optional smoke: `pnpm run test:smoke:leads`
+1. [Deploy Re-entry Truth Map](./notes/NOTE-007.deploy-entrypoints-and-truth-map.md)
+2. [Latest Deploy Anamnesis](./reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md)
+3. [Deploy Docker Contract](./runbooks/DEPLOY_DOCKER_CONTRACT.md)
+4. [Environment Matrix](./runbooks/ENV_MATRIX.md)
+
+Historical/rollback references only:
+
+1. [Legacy Go-Live Runbook](./runbooks/GO_LIVE.md)
+2. [VPS Live Baseline Snapshot 2026-03-01](./infra-ops/VPS_LIVE_BASELINE_2026-03-01.md)
+
+## Landing Domain
+
+- [Landing Index](./landing/INDEX.md)
+- [PRD Phase 1: Landing](./prd/PRD-PHASE-1.LANDING.md)
+- [Landing Content JSON Contract](./contracts/CONTRACT-001.landing.content-json.v1.0.md)
+- [Leads Smoke Runbook](./runbooks/LEADS_SMOKE_LOCAL.md)
+
+## Cabinet Domain
+
+- [Epics Index](./epics/INDEX.md)
+- [EPIC-002 Cabinet Auth Foundation](./epics/EPIC-002.cabinet.auth-foundation/EPIC.md)
+- [PRD-002 Cabinet Materials Auth](./prd/PRD-002.cabinet.materials-auth.v0.1.md)
+- [ADR-002 Cabinet Auth Baseline](./adr/ADR-002.cabinet.auth-baseline.v0.1.md)
+- [Cabinet Local Smoke Runbook](./runbooks/CABINET_LOCAL_SMOKE.md)
+
+## Seminar Domain
+
+- [Seminar Index](./seminar/INDEX.md)
+- [LLM Office Work Domain Root](./seminar/ARCH-003.ai.office-work-knowledge-domain.v0.1.md)
+- [LLM Office Work Domain Index](./seminar/LLM_OFFICE_WORK/INDEX.md)
+
+## Redirects
+
+- [Moved Docs Redirects](./_index/redirects.md)

@@ -61,7 +61,7 @@ logger.error({
 
 ## How to choose domain/module
 `domain` отвечает на вопрос «что произошло»:
-- `runtime`, `content`, `landing`, `leads`, `admin`, `obs`.
+- `runtime`, `content`, `landing`, `leads`, `admin`, `cabinet`, `obs`.
 
 `module` отвечает на вопрос «где произошло»:
 - `kebab-case/path`, например `landing/ab-selector`, `content/loader`, `runtime/http-middleware`.
@@ -72,6 +72,7 @@ logger.error({
 - `landing.*`
 - `leads.*`
 - `admin.*`
+- `cabinet.*`
 - `runtime.*`
 - `obs.*`
 
@@ -79,6 +80,7 @@ logger.error({
 - `content.bundle_load_failed`
 - `landing.render_degraded`
 - `admin.unauthorized`
+- `cabinet.unauthorized`
 
 ## How to log degradations
 Если операция не упала полностью, но поведение ухудшилось:

@@ -3,6 +3,10 @@
 ## Purpose
 Определяет canonical атомарный deploy/rollback контракт для production Docker-платформы.
 
+Read first when resuming deploy work in a fresh chat:
+- `docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md`
+- `docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md`
+
 ## Scope
 - Platform edge stack (Traefik)
 - Seminar app stack (future attachment)
@@ -119,6 +123,7 @@ gh run view <run_id> --log | rg "pinned image|digest|image_ref"
 ## Strategic Gates
 - `STOP_CONTRACT_REQUIRED` if backup/restore contract is not approved.
 - `STOP_CONTRACT_REQUIRED` if OBS logs source policy (journald vs docker logs) is not approved.
+- `STOP_CONTRACT_REQUIRED` for the first cabinet go-live if temporary bootstrap envs and SQLite triplet backup are not prepared.
 
 ## Evidence Required Per Deploy
 1. `docker compose ps` snapshot.

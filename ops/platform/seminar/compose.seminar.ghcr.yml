@@ -1,3 +1,6 @@
+# LIVE production deploy control plane uses this Docker attachment model.
+# Do not treat legacy /var/www/seminar + systemctl flow as the default path.
+# Re-entry docs: docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md
 name: seminar-ghcr-prod
 
 services:

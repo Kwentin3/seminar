@@ -1,6 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "../layout/AppLayout";
 import { AdminPage } from "../routes/AdminPage";
+import { CabinetLoginPage } from "../routes/CabinetLoginPage";
+import { CabinetMaterialPage } from "../routes/CabinetMaterialPage";
+import { CabinetPage } from "../routes/CabinetPage";
 import { LandingPage } from "../routes/LandingPage";
 
 export const router = createBrowserRouter([
@@ -15,6 +18,18 @@ export const router = createBrowserRouter([
       {
         path: "admin",
         element: <AdminPage />
+      },
+      {
+        path: "cabinet/login",
+        element: <CabinetLoginPage />
+      },
+      {
+        path: "cabinet",
+        element: <CabinetPage />
+      },
+      {
+        path: "cabinet/materials/:slug",
+        element: <CabinetMaterialPage />
       }
     ]
   }

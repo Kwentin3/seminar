@@ -14,7 +14,10 @@
     "preview": "pnpm --filter @seminar/web preview",
     "validate:content": "pnpm --filter @seminar/contracts run build && node scripts/validate-landing-content.mjs",
     "test:content:validator": "pnpm --filter @seminar/contracts run build && node scripts/test-landing-content-validator.mjs",
+    "test:cabinet": "node --test tests/cabinet/cabinet-auth.integration.test.mjs tests/cabinet/cabinet-bootstrap.integration.test.mjs tests/cabinet/cabinet-session-regressions.integration.test.mjs tests/cabinet/cabinet-reading.integration.test.mjs",
     "test:obs": "node --test tests/obs/logger.contract.test.mjs tests/obs/canonical-json.unit.test.mjs tests/obs/log-retrieval.source.unit.test.mjs tests/obs/log-retrieval.integration.test.mjs",
+    "test:smoke:cabinet": "node scripts/test-smoke-cabinet.mjs",
+    "test:smoke:cabinet:browser": "node scripts/test-smoke-cabinet-browser.mjs",
     "obs:logs": "node scripts/obs/logs.mjs",
     "dev:pages": "pnpm run build:web && wrangler pages dev apps/web/dist --local",
     "d1:migrate:local": "wrangler d1 migrations apply seminar-leads --local",
@@ -36,6 +39,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.18",
     "globals": "^15.15.0",
+    "playwright": "^1.54.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.24.0",
     "wrangler": "^4.50.0"

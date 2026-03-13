@@ -1,9 +1,12 @@
-⚠️ LEGACY DEPLOY (systemd + nginx) — DEPRECATED
+⚠️ LEGACY ROLLBACK RUNBOOK (systemd + nginx) — NOT DEFAULT
 
 Production baseline since 2026-03-01:
 Docker + Traefik + GHCR pinned digest.
 
 Legacy flow allowed only for rollback scenarios.
+Read first for current deploy truth:
+- `docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md`
+- `docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md`
 
 # Go Live Runbook (JustHost VPS)
 
@@ -20,7 +23,7 @@ Current status:
 - This runbook is retained for rollback operations only.
 - Canonical production deploy path is defined in `docs/runbooks/DEPLOY_DOCKER_CONTRACT.md`.
 
-## Current Production Baseline
+## Legacy Rollback Baseline
 
 - Runtime host: JustHost VPS (`91.132.48.224`)
 - SSH access policy (updated `2026-02-27`): root login via SSH key only (`PasswordAuthentication` is disabled for operational access).
@@ -31,6 +34,11 @@ Current status:
 - App port (internal): `127.0.0.1:8787`
 - Public entrypoint: `nginx :80/:443`
 - Database file: `/var/lib/seminar/seminar.sqlite`
+
+Important:
+- these paths describe the retained legacy rollback contour;
+- they do not describe the active live deploy control plane on `2026-03-13`;
+- active live deploy control plane is Docker-based under `/opt/seminar`.
 
 ## Prerequisites
 

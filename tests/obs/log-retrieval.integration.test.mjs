@@ -589,6 +589,162 @@ test("admin internal failure logs admin_action_failed and not admin_auth_failed"
   );
 });
 
+test("cabinet flow emits canon-compliant cabinet events without schema violations", async (t) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "seminar-cabinet-obs-flow-"));
+  const port = 19_150 + Math.floor(Math.random() * 400);
+  const host = "127.0.0.1";
+  const staticDir = path.join(tempDir, "static");
+  const staticIndex = path.join(staticDir, "index.html");
+  const databasePath = path.join(tempDir, "cabinet-obs.sqlite");
+
+  await mkdir(staticDir, { recursive: true });
+  await writeFile(staticIndex, "<!doctype html><html><body>cabinet obs test</body></html>", "utf8");
+
+  const server = spawn(process.execPath, [path.resolve("server/index.mjs")], {
+    env: {
+      ...process.env,
+      HOST: host,
+      PORT: String(port),
+      STATIC_DIR: staticDir,
+      DATABASE_PATH: databasePath,
+      MIGRATIONS_DIR: path.resolve("migrations"),
+      TURNSTILE_MODE: "mock",
+      ALLOW_TURNSTILE_MOCK: "1",
+      TURNSTILE_SECRET_KEY: "dummy",
+      ADMIN_SECRET: "test-admin-secret",
+      CABINET_BOOTSTRAP_ADMIN: "1",
+      CABINET_BOOTSTRAP_USERNAME: "obs-admin",
+      CABINET_BOOTSTRAP_EMAIL: "obs-admin@example.com",
+      CABINET_BOOTSTRAP_PASSWORD: "obs-admin-pass"
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const collector = createNdjsonCollector(server.stdout);
+  let stderr = "";
+  server.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+
+  t.after(async () => {
+    await stopProcess(server);
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  await waitForServer(`http://${host}:${port}/api/healthz`);
+
+  const unauthorized = await fetch(`http://${host}:${port}/api/cabinet/session`);
+  assert.equal(unauthorized.status, 401, `unexpected status: ${unauthorized.status}, stderr: ${stderr}`);
+  const unauthorizedRequestId = unauthorized.headers.get("x-request-id");
+  assert.ok(unauthorizedRequestId, "expected x-request-id header");
+
+  const login = await fetch(`http://${host}:${port}/api/cabinet/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      login: "obs-admin",
+      password: "obs-admin-pass"
+    })
+  });
+  assert.equal(login.status, 200, `unexpected status: ${login.status}, stderr: ${stderr}`);
+  const loginRequestId = login.headers.get("x-request-id");
+  assert.ok(loginRequestId, "expected x-request-id header");
+  const sessionCookie = login.headers.get("set-cookie")?.split(";")[0] ?? null;
+  assert.ok(sessionCookie, "expected cabinet session cookie");
+
+  const materials = await fetch(`http://${host}:${port}/api/cabinet/materials`, {
+    headers: {
+      Cookie: sessionCookie
+    }
+  });
+  assert.equal(materials.status, 200, `unexpected status: ${materials.status}, stderr: ${stderr}`);
+  const materialsRequestId = materials.headers.get("x-request-id");
+  assert.ok(materialsRequestId, "expected x-request-id header");
+  const materialsPayload = await materials.json();
+  assert.ok(materialsPayload.items.length > 0, "expected materials");
+
+  const open = await fetch(`http://${host}:${port}${materialsPayload.items[0].open_url}`, {
+    headers: {
+      Cookie: sessionCookie
+    }
+  });
+  assert.equal(open.status, 200, `unexpected status: ${open.status}, stderr: ${stderr}`);
+  const openRequestId = open.headers.get("x-request-id");
+  assert.ok(openRequestId, "expected x-request-id header");
+
+  const logout = await fetch(`http://${host}:${port}/api/cabinet/logout`, {
+    method: "POST",
+    headers: {
+      Cookie: sessionCookie
+    }
+  });
+  assert.equal(logout.status, 200, `unexpected status: ${logout.status}, stderr: ${stderr}`);
+  const logoutRequestId = logout.headers.get("x-request-id");
+  assert.ok(logoutRequestId, "expected x-request-id header");
+
+  await waitForCondition(() =>
+    collector.records.some(
+      (record) =>
+        record.request_id === unauthorizedRequestId &&
+        record.event === "cabinet_auth_failed" &&
+        record.domain === "cabinet"
+    ) &&
+    collector.records.some(
+      (record) =>
+        record.request_id === loginRequestId &&
+        record.event === "cabinet_login_succeeded" &&
+        record.domain === "cabinet"
+    ) &&
+    collector.records.some(
+      (record) =>
+        record.request_id === openRequestId &&
+        record.event === "cabinet_material_open_completed" &&
+        record.domain === "cabinet"
+    ) &&
+    collector.records.some(
+      (record) =>
+        record.request_id === logoutRequestId &&
+        record.event === "cabinet_logout_succeeded" &&
+        record.domain === "cabinet"
+    )
+  );
+
+  const cabinetRequestIds = [unauthorizedRequestId, loginRequestId, materialsRequestId, openRequestId, logoutRequestId];
+  for (const requestId of cabinetRequestIds) {
+    assert.equal(
+      collector.records.some(
+        (record) => record.request_id === requestId && record.event === "obs.schema_violation_detected"
+      ),
+      false,
+      `did not expect schema violation for ${requestId}`
+    );
+    assert.equal(
+      collector.records.some((record) => record.request_id === requestId && record.event === "unknown"),
+      false,
+      `did not expect unknown event for ${requestId}`
+    );
+  }
+
+  const authFailure = collector.records.find(
+    (record) => record.request_id === unauthorizedRequestId && record.event === "cabinet_auth_failed"
+  );
+  assert.ok(authFailure, "expected cabinet_auth_failed");
+  assert.equal(authFailure.error?.code, "cabinet.unauthorized");
+
+  const loginSuccess = collector.records.find(
+    (record) => record.request_id === loginRequestId && record.event === "cabinet_login_succeeded"
+  );
+  assert.ok(loginSuccess, "expected cabinet_login_succeeded");
+  assert.equal(loginSuccess.payload?.role, "admin");
+
+  const openCompleted = collector.records.find(
+    (record) => record.request_id === openRequestId && record.event === "cabinet_material_open_completed"
+  );
+  assert.ok(openCompleted, "expected cabinet_material_open_completed");
+  assert.equal(typeof openCompleted.duration_ms, "number");
+});
+
 test("admin /admin/obs/logs streams NDJSON with auth and limits", async (t) => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "seminar-obs-endpoint-"));
   const port = 18_700 + Math.floor(Math.random() * 500);

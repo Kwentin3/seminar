@@ -5,3 +5,16 @@ ALLOW_TURNSTILE_MOCK=0
 # Local-only branch marker used by mock triple-lock.
 CF_PAGES_BRANCH=local
 ADMIN_SECRET=replace_with_admin_secret
+CABINET_BOOTSTRAP_ADMIN=0
+# Enable once to create the first internal admin. Existing users are not reset
+# unless CABINET_BOOTSTRAP_ALLOW_RESET=1 is set intentionally for that startup.
+CABINET_BOOTSTRAP_USERNAME=local-admin
+CABINET_BOOTSTRAP_EMAIL=local-admin@example.com
+CABINET_BOOTSTRAP_PASSWORD=local-admin-pass
+# Optional: use only for an intentional one-time admin password reset.
+# CABINET_BOOTSTRAP_ALLOW_RESET=1
+# Optional cabinet overrides:
+# CABINET_SESSION_COOKIE_NAME=seminar_cabinet_session
+# CABINET_SESSION_TTL_HOURS=168
+# CABINET_LOGIN_WINDOW_MINUTES=10
+# CABINET_LOGIN_MAX_ATTEMPTS=10

@@ -6,3 +6,17 @@
 | `OBS.CONTENT.LANDING.MINIMUM_SET.IMPLEMENT.1.report.md` | `docs/reports/2026-02-28/OBS.CONTENT.LANDING.MINIMUM_SET.IMPLEMENT.1.report.md` |
 | `OBS.LOGGING.DOCS.CONSOLIDATE.1.report.md` | `docs/reports/2026-02-28/OBS.LOGGING.DOCS.CONSOLIDATE.1.report.md` |
 | `OBS.LOGGING.CODE.ANCHOR.1.report.md` | `docs/reports/2026-02-28/OBS.LOGGING.CODE.ANCHOR.1.report.md` |
+| `docs/ARCHITECTURE/ARCH-003.ai.office-work-knowledge-domain.v0.1.md` | `docs/seminar/ARCH-003.ai.office-work-knowledge-domain.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/INDEX.md` | `docs/seminar/LLM_OFFICE_WORK/INDEX.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-004.ai.office-work-taxonomy.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-004.ai.office-work-taxonomy.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-005.ai.office-work-terminology.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-005.ai.office-work-terminology.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-006.ai.office-work-research-directions.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-006.ai.office-work-research-directions.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-007.ai.office-work-negative-ux-taxonomy.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-007.ai.office-work-negative-ux-taxonomy.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-008.ai.office-work-structured-outputs.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-008.ai.office-work-structured-outputs.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-009.ai.office-work-workflow-integration.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-009.ai.office-work-workflow-integration.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-010.ai.office-work-deep-research.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-010.ai.office-work-deep-research.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-011.ai.office-work-adoption-playbook.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-011.ai.office-work-adoption-playbook.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-012.ai.office-work-implementation-scenarios.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-012.ai.office-work-implementation-scenarios.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-013.ai.office-work-adaptive-prompting-systems.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-013.ai.office-work-adaptive-prompting-systems.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-014.ai.office-work-seminar-teaching-model.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-014.ai.office-work-seminar-teaching-model.v0.1.md` |
+| `docs/ARCHITECTURE/LLM_OFFICE_WORK/ARCH-015.ai.office-work-capability-model.v0.1.md` | `docs/seminar/LLM_OFFICE_WORK/ARCH-015.ai.office-work-capability-model.v0.1.md` |

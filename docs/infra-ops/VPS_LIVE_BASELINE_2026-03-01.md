@@ -4,6 +4,10 @@
 - Snapshot source: live VPS `91.132.48.224`
 - Collection date (UTC): `2026-03-01`
 - Purpose: close context gaps for Docker/Traefik migration planning
+- Status in current canon: legacy live snapshot and rollback reference only, not the canonical target contour
+- Newer live-truth check exists:
+  - `docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md`
+  - `docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md`
 
 ## Domain Inventory (Live)
 - `seminar-ai.ru`

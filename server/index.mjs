@@ -5,6 +5,23 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { parsePhoneNumberFromString } from "libphonenumber-js/max";
+import {
+  authenticateCabinetRequest,
+  clearExpiredSessions,
+  clearFailedLoginAttempts,
+  createCabinetAuthState,
+  createLoginAttemptKey,
+  createSession,
+  deleteSession,
+  isLoginRateLimited,
+  readSessionToken,
+  registerFailedLoginAttempt,
+  serializeClearedSessionCookie,
+  serializeSessionCookie
+} from "./cabinet/auth.mjs";
+import { readCabinetConfig } from "./cabinet/config.mjs";
+import { syncMaterialsFromRegistry } from "./cabinet/materials-registry.mjs";
+import { hashPassword, verifyPasswordWithFallback } from "./cabinet/passwords.mjs";
 // DO NOT use console.log for runtime events.
 // Use server/obs/logger.mjs instead (CONTRACT-OBS-001).
 import { logger } from "./obs/logger.mjs";
@@ -44,13 +61,21 @@ const turnstileSecretKey = readString(process.env.TURNSTILE_SECRET_KEY);
 const adminSecret = readString(process.env.ADMIN_SECRET);
 const turnstileMode = readString(process.env.TURNSTILE_MODE) === "mock" ? "mock" : "real";
 const allowTurnstileMock = process.env.ALLOW_TURNSTILE_MOCK === "1";
+const cabinetConfig = readCabinetConfig(process.env);
 
 if (!existsSync(staticDir)) {
   throw new Error(`Static directory does not exist: ${staticDir}. Run "pnpm run build:web" first.`);
 }
 
 const db = openDatabase(databasePath);
+// Startup runs schema migrations automatically. For the first cabinet go-live on
+// a pre-cabinet production DB, a SQLite triplet backup is mandatory before rollout.
 applyMigrations(db, migrationsDir);
+const materialSyncSummary = syncMaterialsFromRegistry(db, repoRoot);
+// This bootstrap path is only for creating or intentionally resetting the first
+// cabinet admin. Do not leave reset-enabled bootstrap envs in long-lived production.
+const bootstrapAdminSummary = ensureBootstrapAdmin(db, cabinetConfig);
+const cabinetAuthState = createCabinetAuthState();
 
 const app = express();
 app.set("trust proxy", true);
@@ -60,6 +85,391 @@ app.use(express.json({ limit: "64kb" }));
 
 app.get("/api/healthz", (_request, response) => {
   response.status(200).json({ ok: true });
+});
+
+app.post("/api/cabinet/login", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const payload = parseCabinetLoginRequest(request.body);
+    if (!payload.ok) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: payload.message
+      });
+    }
+
+    const remoteIp = getRemoteIp(request);
+    const attemptKey = createLoginAttemptKey(payload.data.login, remoteIp);
+    const now = Date.now();
+    if (isLoginRateLimited(cabinetAuthState, attemptKey, now, cabinetConfig)) {
+      logger.warn({
+        event: "cabinet_login_failed",
+        domain: "cabinet",
+        module: "cabinet/login-handler",
+        duration_ms: elapsedMs(startedAt),
+        payload: {
+          status_code: 429,
+          reason: "rate_limited"
+        }
+      });
+      return jsonError(response, 429, {
+        code: "cabinet_rate_limited",
+        message: "Слишком много попыток входа. Попробуйте позже."
+      });
+    }
+
+    const user = findCabinetUserByLogin(db, payload.data.login);
+    const isPasswordValid = verifyPasswordWithFallback(payload.data.password, user?.password_hash);
+    if (!user || !isPasswordValid) {
+      registerFailedLoginAttempt(cabinetAuthState, attemptKey, now, cabinetConfig);
+      logger.warn({
+        event: "cabinet_login_failed",
+        domain: "cabinet",
+        module: "cabinet/login-handler",
+        duration_ms: elapsedMs(startedAt),
+        payload: {
+          status_code: 401,
+          reason: "invalid_credentials"
+        }
+      });
+      return jsonError(response, 401, {
+        code: "cabinet_invalid_credentials",
+        message: "Неверный логин или пароль."
+      });
+    }
+
+    clearFailedLoginAttempts(cabinetAuthState, attemptKey);
+    clearExpiredSessions(db);
+
+    const session = createSession(db, user.id, cabinetConfig);
+    db.prepare("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?").run(
+      new Date().toISOString(),
+      new Date().toISOString(),
+      user.id
+    );
+
+    response.setHeader("Set-Cookie", serializeSessionCookie(session.token, cabinetConfig, session.expiresAt));
+    logger.info({
+      event: "cabinet_login_succeeded",
+      domain: "cabinet",
+      module: "cabinet/login-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: user.role
+      }
+    });
+    return response.status(200).json({
+      ok: true,
+      user: sanitizeCabinetUser(user)
+    });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/login-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/login"
+      },
+      error: createObsError("cabinet.login_failed", "internal", true, "infra", "cabinet login failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/logout", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const sessionToken = readSessionToken(request, cabinetConfig);
+    deleteSession(db, sessionToken);
+    response.setHeader("Set-Cookie", serializeClearedSessionCookie(cabinetConfig));
+    logger.info({
+      event: "cabinet_logout_succeeded",
+      domain: "cabinet",
+      module: "cabinet/logout-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200
+      }
+    });
+    return response.status(200).json({ ok: true });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/logout-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/logout"
+      },
+      error: createObsError("cabinet.logout_failed", "internal", true, "infra", "cabinet logout failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/session", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/session-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    return response.status(200).json({
+      ok: true,
+      user: sanitizeCabinetUser(cabinetSession)
+    });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/session-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/session"
+      },
+      error: createObsError("cabinet.session_failed", "internal", true, "infra", "cabinet session failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/materials", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/materials-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const materials = queryCabinetMaterialRows(db);
+    const items = materials.map((row) => toCabinetMaterialApiItem(row));
+
+    const stats =
+      cabinetSession.role === "admin"
+        ? {
+            total_materials: items.length,
+            categories: Array.from(new Set(items.map((item) => item.category))).sort()
+          }
+        : null;
+
+    return response.status(200).json({
+      ok: true,
+      items,
+      viewer_role: cabinetSession.role,
+      stats
+    });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/materials-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials"
+      },
+      error: createObsError("cabinet.materials_failed", "internal", true, "infra", "cabinet materials failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/materials/:slug", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-detail-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const material = findCabinetMaterialRow(db, slug);
+    if (!material) {
+      return jsonError(response, 404, {
+        code: "invalid_input",
+        message: "Material not found."
+      });
+    }
+
+    const content = readCabinetMaterialContent(repoRoot, material);
+    const relatedItems = buildRelatedCabinetItems(queryCabinetMaterialRows(db), material.slug);
+
+    logger.info({
+      event: "cabinet_material_read_completed",
+      domain: "cabinet",
+      module: "cabinet/material-detail-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug: material.slug,
+        role: cabinetSession.role,
+        reading_mode: isInAppReadableMaterial(material) ? "in_app" : "external"
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      item: {
+        ...toCabinetMaterialApiItem(material),
+        content,
+        related_items: relatedItems
+      }
+    });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/material-detail-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug"
+      },
+      error: createObsError("cabinet.material_read_failed", "internal", true, "infra", "cabinet material detail failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/materials/:slug/open", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-open-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const material = db
+      .prepare(
+        `SELECT
+          slug,
+          title,
+          source_kind,
+          source_path
+         FROM materials
+         WHERE slug = ?
+           AND is_active = 1
+         LIMIT 1`
+      )
+      .get(slug);
+
+    if (!material) {
+      return jsonError(response, 404, {
+        code: "invalid_input",
+        message: "Material not found."
+      });
+    }
+
+    if (material.source_kind === "external_url") {
+      return response.redirect(material.source_path);
+    }
+
+    const absolutePath = resolveMaterialPath(repoRoot, material.source_path);
+    if (!absolutePath || !existsSync(absolutePath)) {
+      logger.warn({
+      event: "cabinet_material_open_failed",
+      domain: "cabinet",
+      module: "cabinet/material-open-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 404,
+        slug: material.slug
+      },
+      error: createObsError(
+        "cabinet.material_unavailable",
+        "dependency",
+        false,
+        "infra",
+        "cabinet material file is unavailable"
+      )
+    });
+      return jsonError(response, 404, {
+        code: "invalid_input",
+        message: "Material file is unavailable."
+      });
+    }
+
+    logger.info({
+      event: "cabinet_material_open_completed",
+      domain: "cabinet",
+      module: "cabinet/material-open-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug: material.slug,
+        role: cabinetSession.role
+      }
+    });
+
+    if (material.source_kind === "repo_markdown") {
+      response.type("text/markdown; charset=utf-8");
+      return response.send(readFileSync(absolutePath, "utf8"));
+    }
+
+    return response.sendFile(absolutePath, {
+      headers: {
+        "Content-Disposition": "inline"
+      }
+    });
+  } catch (error) {
+    logger.error({
+      event: "cabinet_action_failed",
+      domain: "cabinet",
+      module: "cabinet/material-open-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug/open"
+      },
+      error: createObsError("cabinet.material_open_failed", "internal", true, "infra", "cabinet material open failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
 });
 
 app.post("/api/leads", async (request, response) => {
@@ -551,9 +961,57 @@ app.listen(port, host, () => {
       host,
       port,
       static_dir: staticDir,
-      database_path: databasePath
+      database_path: databasePath,
+      cabinet_materials_seeded: materialSyncSummary.totalCount
     }
   });
+  if (bootstrapAdminSummary.status === "created" || bootstrapAdminSummary.status === "updated") {
+    logger.info({
+      event: "cabinet_bootstrap_completed",
+      domain: "cabinet",
+      module: "runtime/server-bootstrap",
+      duration_ms: 0,
+      payload: {
+        status: bootstrapAdminSummary.status
+      }
+    });
+  }
+  if (bootstrapAdminSummary.status === "exists") {
+    logger.warn({
+      event: "runtime_dependency_failed",
+      domain: "cabinet",
+      module: "runtime/server-bootstrap",
+      payload: {
+        dependency: "cabinet_bootstrap_admin",
+        reason: "bootstrap_flag_left_enabled_without_reset"
+      },
+      error: createObsError(
+        "cabinet.bootstrap_admin_exists",
+        "dependency",
+        false,
+        "infra",
+        "bootstrap admin env is still enabled; no reset was performed because CABINET_BOOTSTRAP_ALLOW_RESET is not enabled"
+      )
+    });
+  }
+  if (bootstrapAdminSummary.status === "missing") {
+    logger.warn({
+      event: "runtime_dependency_failed",
+      domain: "cabinet",
+      module: "runtime/server-bootstrap",
+      payload: {
+        dependency: "cabinet_bootstrap_admin",
+        reason: "no_active_admin_user"
+      },
+      error: createObsError(
+        "cabinet.bootstrap_admin_missing",
+        "dependency",
+        true,
+        "infra",
+        "cabinet has no active admin user and bootstrap seed is disabled"
+      )
+    });
+  }
   if (!turnstileSecretKey) {
     logger.warn({
       event: "runtime_dependency_failed",
@@ -659,6 +1117,338 @@ function queryCount(database, query, values) {
   } catch {
     return null;
   }
+}
+
+function ensureBootstrapAdmin(database, config) {
+  const now = new Date().toISOString();
+  const activeAdminCount = queryCount(
+    database,
+    "SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND is_active = 1",
+    []
+  );
+
+  if (!config.bootstrapAdmin.enabled) {
+    return {
+      status: activeAdminCount && activeAdminCount > 0 ? "skipped" : "missing"
+    };
+  }
+
+  const normalizedUsername = config.bootstrapAdmin.username.trim().toLowerCase();
+  const normalizedEmail = config.bootstrapAdmin.email?.toLowerCase() ?? null;
+  const existing = database
+    .prepare(
+      `SELECT id
+       FROM users
+       WHERE lower(username) = ?
+          OR (? IS NOT NULL AND lower(email) = ?)
+       LIMIT 1`
+    )
+    .get(normalizedUsername, normalizedEmail, normalizedEmail);
+
+  const passwordHash = hashPassword(config.bootstrapAdmin.password);
+
+  // Bootstrap is env-driven by design so the first admin can be recreated
+  // without manual SQL. The env flag should be removed after the intended reset.
+  if (existing) {
+    if (!config.bootstrapAdmin.allowReset) {
+      return { status: "exists", userId: existing.id };
+    }
+
+    database
+      .prepare(
+        `UPDATE users
+         SET username = ?,
+             email = ?,
+             password_hash = ?,
+             role = 'admin',
+             is_active = 1,
+             updated_at = ?
+         WHERE id = ?`
+      )
+      .run(normalizedUsername, normalizedEmail, passwordHash, now, existing.id);
+    // Resetting the bootstrap admin password should also invalidate prior sessions
+    // so an env-assisted reset does not leave stale authenticated cookies alive.
+    database.prepare("DELETE FROM sessions WHERE user_id = ?").run(existing.id);
+    return { status: "updated", userId: existing.id };
+  }
+
+  const userId = randomUUID();
+  database
+    .prepare(
+      `INSERT INTO users (
+        id,
+        username,
+        email,
+        password_hash,
+        role,
+        is_active,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, 'admin', 1, ?, ?)`
+    )
+    .run(userId, normalizedUsername, normalizedEmail, passwordHash, now, now);
+
+  return { status: "created", userId };
+}
+
+function findCabinetUserByLogin(database, login) {
+  const normalizedLogin = login.trim().toLowerCase();
+  return database
+    .prepare(
+      `SELECT
+        id,
+        username,
+        email,
+        password_hash,
+        role,
+        is_active
+       FROM users
+       WHERE is_active = 1
+         AND (lower(username) = ? OR lower(email) = ?)
+       LIMIT 1`
+    )
+    .get(normalizedLogin, normalizedLogin);
+}
+
+function sanitizeCabinetUser(user) {
+  return {
+    id: user.userId ?? user.id,
+    username: user.username,
+    email: typeof user.email === "string" ? user.email : null,
+    role: user.role === "admin" ? "admin" : "viewer"
+  };
+}
+
+function parseCabinetLoginRequest(value) {
+  if (!isRecord(value)) {
+    return { ok: false, message: "Payload must be an object." };
+  }
+
+  const login = readString(value.login);
+  if (!login) {
+    return { ok: false, message: "login is required." };
+  }
+
+  const password = readString(value.password);
+  if (!password) {
+    return { ok: false, message: "password is required." };
+  }
+
+  return {
+    ok: true,
+    data: {
+      login,
+      password
+    }
+  };
+}
+
+function requireCabinetSession(request, response, startedAt, moduleName) {
+  const cabinetSession = authenticateCabinetRequest(db, request, cabinetConfig);
+  if (cabinetSession) {
+    return cabinetSession;
+  }
+
+  logger.warn({
+    event: "cabinet_auth_failed",
+    domain: "cabinet",
+    module: moduleName,
+    duration_ms: elapsedMs(startedAt),
+    payload: {
+      endpoint: request.path,
+      status_code: 401
+    },
+    error: createObsError("cabinet.unauthorized", "validation", false, "domain", "unauthorized cabinet request")
+  });
+  jsonError(response, 401, {
+    code: "cabinet_unauthorized",
+    message: "Требуется вход в кабинет."
+  });
+  return null;
+}
+
+function parseTagsJson(rawTags) {
+  try {
+    const parsed = JSON.parse(rawTags);
+    return Array.isArray(parsed) ? parsed.filter((tag) => typeof tag === "string" && tag.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function queryCabinetMaterialRows(database) {
+  return database
+    .prepare(
+      `SELECT
+        id,
+        slug,
+        title,
+        summary,
+        material_status,
+        material_type,
+        category,
+        theme,
+        audience,
+        language,
+        source_updated_at,
+        curation_reviewed_at,
+        source_kind,
+        source_path,
+        recommended_for_lecture_prep,
+        tags_json
+       FROM materials
+       WHERE is_active = 1
+       ORDER BY
+         recommended_for_lecture_prep DESC,
+         CASE material_status
+           WHEN 'final' THEN 0
+           WHEN 'working' THEN 1
+           ELSE 2
+         END ASC,
+         title ASC`
+    )
+    .all();
+}
+
+function findCabinetMaterialRow(database, slug) {
+  return database
+    .prepare(
+      `SELECT
+        id,
+        slug,
+        title,
+        summary,
+        material_status,
+        material_type,
+        category,
+        theme,
+        audience,
+        language,
+        source_updated_at,
+        curation_reviewed_at,
+        source_kind,
+        source_path,
+        recommended_for_lecture_prep,
+        tags_json
+       FROM materials
+       WHERE slug = ?
+         AND is_active = 1
+       LIMIT 1`
+    )
+    .get(slug);
+}
+
+function toCabinetMaterialApiItem(row) {
+  const readingMode = isInAppReadableMaterial(row) ? "in_app" : "external";
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: typeof row.summary === "string" && row.summary.trim().length > 0 ? row.summary : null,
+    material_status: row.material_status === "final" || row.material_status === "working" ? row.material_status : "draft",
+    material_type: row.material_type,
+    category: row.category,
+    theme: typeof row.theme === "string" && row.theme.trim().length > 0 ? row.theme : null,
+    audience: row.audience,
+    language: row.language,
+    source_updated_at: typeof row.source_updated_at === "string" && row.source_updated_at.trim().length > 0 ? row.source_updated_at : null,
+    curation_reviewed_at:
+      typeof row.curation_reviewed_at === "string" && row.curation_reviewed_at.trim().length > 0
+        ? row.curation_reviewed_at
+        : null,
+    source_kind: row.source_kind,
+    source_path: row.source_path,
+    recommended_for_lecture_prep: row.recommended_for_lecture_prep === 1,
+    tags: parseTagsJson(row.tags_json),
+    reading_mode: readingMode,
+    read_url: readingMode === "in_app" ? `/cabinet/materials/${row.slug}` : null,
+    open_url: `/api/cabinet/materials/${row.slug}/open`
+  };
+}
+
+function isInAppReadableMaterial(material) {
+  return material.material_type === "markdown" && material.source_kind === "repo_markdown";
+}
+
+function readCabinetMaterialContent(repoRootPath, material) {
+  if (!isInAppReadableMaterial(material)) {
+    return null;
+  }
+
+  const absolutePath = resolveMaterialPath(repoRootPath, material.source_path);
+  if (!absolutePath || !existsSync(absolutePath)) {
+    return null;
+  }
+
+  return {
+    format: "markdown",
+    markdown: stripMarkdownFrontmatter(readFileSync(absolutePath, "utf8")).trim()
+  };
+}
+
+function stripMarkdownFrontmatter(text) {
+  const normalizedText = typeof text === "string" ? text.replace(/^\uFEFF/, "") : "";
+  if (!normalizedText.startsWith("---\n") && !normalizedText.startsWith("---\r\n")) {
+    return normalizedText;
+  }
+
+  const closingMatch = normalizedText.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  if (!closingMatch) {
+    return normalizedText;
+  }
+
+  return normalizedText.slice(closingMatch[0].length);
+}
+
+function buildRelatedCabinetItems(materialRows, currentSlug) {
+  const currentMaterial = materialRows.find((row) => row.slug === currentSlug);
+  if (!currentMaterial) {
+    return [];
+  }
+
+  const currentTags = new Set(parseTagsJson(currentMaterial.tags_json));
+  return materialRows
+    .filter((row) => row.slug !== currentSlug)
+    .map((row) => {
+      const tags = parseTagsJson(row.tags_json);
+      const sharedTagCount = tags.filter((tag) => currentTags.has(tag)).length;
+      const sameCategoryBoost = row.category === currentMaterial.category ? 2 : 0;
+      const score = sharedTagCount + sameCategoryBoost;
+
+      return {
+        row,
+        score
+      };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.row.title.localeCompare(right.row.title, "ru"))
+    .slice(0, 3)
+    .map((entry) => {
+      const item = toCabinetMaterialApiItem(entry.row);
+      return {
+        slug: item.slug,
+        title: item.title,
+        material_type: item.material_type,
+        read_url: item.read_url,
+        open_url: item.open_url
+      };
+    });
+}
+
+function resolveMaterialPath(repoRootPath, sourcePath) {
+  const normalizedSourcePath = readString(sourcePath);
+  if (!normalizedSourcePath) {
+    return null;
+  }
+
+  const absolutePath = resolve(repoRootPath, normalizedSourcePath);
+  const absoluteRepoRoot = resolve(repoRootPath);
+  if (!absolutePath.startsWith(absoluteRepoRoot)) {
+    return null;
+  }
+
+  return absolutePath;
 }
 
 function normalizePhone(rawPhone, rawCountry) {

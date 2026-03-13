@@ -4,7 +4,7 @@ status: draft
 owner: @Kwentin3
 approved_by:
   - @Kwentin3
-last_updated: 2026-02-27
+last_updated: 2026-03-13
 core_snapshot: n/a
 related:
   - docs/DOCS_CANON.md
@@ -27,9 +27,10 @@ tags:
 4. обязательные проверки контракта (unit/integration/e2e-smoke).
 
 Scope (Phase 1 runtime):
-1. VPS + Node.js + systemd/journald + nginx + SQLite.
-2. Backend structured logs в stdout с доставкой в journald.
-3. Frontend console logging (без серверного ingestion pipeline в Phase 1).
+1. Local/dev runtime: Node.js + SQLite.
+2. Canonical production runtime: Docker + Traefik + SQLite.
+3. Legacy `systemd + journald + nginx` contour сохраняется только как rollback/live snapshot path.
+4. Frontend console logging (без серверного ingestion pipeline в Phase 1).
 
 ## Goals
 1. Сделать лог-события предсказуемыми и машинно-читаемыми.
@@ -52,8 +53,12 @@ Scope (Phase 1 runtime):
 6. LLM-friendly retrieval: выдача логов MUST быть доступна через CLI в NDJSON.
 
 ## Transport
-1. Backend MUST писать JSON события в stdout; systemd/journald MUST быть источником истины для runtime логов.
-2. Frontend в Phase 1 SHOULD использовать только console logging; отправка frontend logs на backend MAY быть добавлена в следующих версиях контракта.
+1. Backend MUST писать JSON события в stdout.
+2. Log retrieval source MUST быть явным и соответствовать runtime contour:
+   - canonical production: docker logs adapter;
+   - legacy rollback contour: journald.
+3. Source switching MUST follow `CONTRACT-OBS-002`.
+4. Frontend в Phase 1 SHOULD использовать только console logging; отправка frontend logs на backend MAY быть добавлена в следующих версиях контракта.
 
 ## Correlation Model
 1. Backend MUST генерировать `request_id` для каждого HTTP-запроса.
@@ -87,7 +92,7 @@ Field rules:
 1. `ts` MUST быть ISO-8601 UTC.
 2. `level` MUST быть одним из `debug|info|warn|error`.
 3. `event` MUST быть `snake_case` и в прошедшем времени (`*_started`, `*_completed`, `*_failed`, `*_selected`, `*_limited`).
-4. `domain` MUST описывать бизнес/операционный домен (`runtime`, `content`, `landing`, `leads`, `admin`, `obs`).
+4. `domain` MUST описывать бизнес/операционный домен (`runtime`, `content`, `landing`, `leads`, `admin`, `cabinet`, `obs`).
 5. `module` MUST быть `kebab-case/path` и MUST соответствовать regex `^[a-z0-9]+(-[a-z0-9]+)*(\/[a-z0-9]+(-[a-z0-9]+)*)*$`.
 6. `request_id` SHOULD присутствовать для всех HTTP-связанных событий.
 7. `request_id` SHOULD быть stable URL-safe opaque string (ULID/UUID/opaque id допустимы).
@@ -123,7 +128,7 @@ Semantic boundaries:
 ```
 
 Rules:
-1. `error.code` MUST быть namespaced и начинаться с: `content.`, `leads.`, `admin.`, `runtime.`, `obs.`.
+1. `error.code` MUST быть namespaced и начинаться с: `content.`, `leads.`, `admin.`, `cabinet.`, `runtime.`, `obs.`.
 2. `category` MUST описывать класс ошибки (например `validation`, `dependency`, `internal`, `timeout`).
 3. `retryable` MUST быть boolean.
 4. `origin` MUST быть одним из `domain|infra|external|obs`.
@@ -204,6 +209,7 @@ Behavior:
 | `landing` | `hero_variant_selected`, `landing_render_degraded` |
 | `leads` | `lead_submit_started`, `lead_submit_completed`, `lead_submit_failed` |
 | `admin` | `admin_auth_succeeded`, `admin_auth_failed`, `admin_action_denied` |
+| `cabinet` | `cabinet_auth_failed`, `cabinet_login_succeeded`, `cabinet_logout_succeeded` |
 | `obs` | `obs.info_rate_limited`, `obs.payload_truncated`, `obs.redaction_failed`, `obs.missing_request_id_detected`, `obs.logger_internal_error` |
 
 Phase policy:

@@ -1,5 +1,14 @@
 # Seminar Migration to Docker (v2, Plan Only)
 
+Historical migration document only.
+Current live production already runs on Docker; for current deploy truth read:
+1. `docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md`
+2. `docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md`
+
+Note:
+- this document preserves the original migration sequence and therefore still mentions older transitional paths such as `/opt/seminar/data`;
+- current live data mount reality is `/opt/seminar/parity-data`.
+
 ## Scope
 План миграции `seminar` на Docker platform edge (Traefik) без изменения публичного API.
 

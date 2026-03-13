@@ -46,6 +46,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Lint
         run: pnpm -r lint
 
@@ -66,8 +69,16 @@ jobs:
       - name: Test observability contract
         run: pnpm run test:obs
 
+      - name: Test cabinet auth integration
+        run: pnpm run test:cabinet
+
       - name: Build
         run: pnpm -r build
+
+      - name: Cabinet browser smoke
+        env:
+          PLAYWRIGHT_HEADLESS: "1"
+        run: pnpm run test:smoke:cabinet:browser
 
       - name: Smoke leads (mock mode)
         env:
@@ -75,6 +86,10 @@ jobs:
           ALLOW_TURNSTILE_MOCK: "1"
           TURNSTILE_SECRET_KEY: dummy-non-empty
           ADMIN_SECRET: dummy-admin-secret
+          CABINET_BOOTSTRAP_ADMIN: "1"
+          CABINET_BOOTSTRAP_USERNAME: local-admin
+          CABINET_BOOTSTRAP_EMAIL: local-admin@example.com
+          CABINET_BOOTSTRAP_PASSWORD: local-admin-pass
           LEADS_BASE_URL: http://127.0.0.1:8787
           DATABASE_PATH: /tmp/seminar-ci.sqlite
           HOST: 127.0.0.1
@@ -108,6 +123,12 @@ jobs:
 
           if ! pnpm run test:smoke:leads; then
             echo "Smoke failed. app log:"
+            cat /tmp/seminar-app.log
+            exit 1
+          fi
+
+          if ! pnpm run test:smoke:cabinet; then
+            echo "Cabinet smoke failed. app log:"
             cat /tmp/seminar-app.log
             exit 1
           fi
@@ -213,6 +234,11 @@ jobs:
           path: ghcr-image-ref.txt
 
   deploy:
+    # LEGACY ROLLBACK JOB ONLY.
+    # Live production on 2026-03-13 uses Docker + Traefik via /opt/seminar,
+    # not /var/www/seminar + systemctl. Do not use this job as the default
+    # deploy path. Read docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md
+    # and docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md first.
     runs-on: ubuntu-latest
     needs: ci
     timeout-minutes: 30
@@ -304,6 +330,9 @@ jobs:
           EOF
 
   deploy_docker_smoke:
+    # This is the live-truth-adjacent verification path.
+    # It exercises the Docker contour used on production, but it is still a smoke
+    # gate and not the full public go-live sequence for cabinet first launch.
     runs-on: ubuntu-latest
     needs: docker_publish
     timeout-minutes: 30

@@ -4,6 +4,10 @@
 
 Workflow: `.github/workflows/ci.yml`
 
+Read first before touching deploy jobs:
+1. `docs/notes/NOTE-007.deploy-entrypoints-and-truth-map.md`
+2. `docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md`
+
 Triggers:
 - `pull_request` (any branch)
 - `push` to `main`
@@ -11,17 +15,22 @@ Triggers:
 
 CI runs:
 1. `pnpm install --frozen-lockfile`
-2. `pnpm -r lint`
-3. `pnpm -r typecheck`
-4. `pnpm -r build`
-5. Smoke leads in mock mode:
+2. `pnpm exec playwright install --with-deps chromium`
+3. `pnpm -r lint`
+4. `pnpm -r typecheck`
+5. `pnpm run test:cabinet`
+6. `pnpm -r build`
+7. Self-managed cabinet browser smoke:
+   - `pnpm run test:smoke:cabinet:browser`
+8. Smoke leads + cabinet in mock mode:
    - `pnpm run start:vps` (background)
    - `pnpm run test:smoke:leads`
-6. Publish Docker image to GHCR:
+   - `pnpm run test:smoke:cabinet`
+9. Publish Docker image to GHCR:
    - canonical image: `ghcr.io/kwentin3/seminar`
    - tags: `sha-<shortsha>` and `main` (for `main`)
    - CI summary exports pinned digest reference
-7. Deploy Docker smoke on VPS by pinned digest (without public edge switch):
+10. Deploy Docker smoke on VPS by pinned digest (without public edge switch):
    - pull `ghcr.io/kwentin3/seminar@sha256:<digest>`
    - run smoke through Traefik smoke bind `127.0.0.1:18080`
    - mandatory `/admin/obs/logs` check with `OBS_LOG_SOURCE=docker`
@@ -67,8 +76,11 @@ Workflow permissions baseline:
 PR is merge-ready only when CI is green:
 - lint
 - typecheck
+- cabinet integration
 - build
+- cabinet browser smoke
 - smoke leads (mock)
+- smoke cabinet (mock)
 
 ## Smoke Failure Triage
 
@@ -83,6 +95,8 @@ Common actions:
 3. Validate local reproduction:
    - `pnpm run start:vps`
    - `pnpm run test:smoke:leads`
+   - `pnpm run test:smoke:cabinet`
+   - `pnpm run test:smoke:cabinet:browser`
 
 ## Secrets Rule
 

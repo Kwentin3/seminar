@@ -267,6 +267,41 @@ test("landing error namespace and landing_render_degraded event are accepted", (
   assert.equal(mainRecord.meta.schema_violation ?? false, false);
 });
 
+test("cabinet domain and cabinet error namespace are accepted without schema violation", () => {
+  const { logger, records } = createCaptureLogger();
+  const context = createRequestContext("req_cabinet_namespace");
+
+  runWithRequestContext(context, () => {
+    logger.warn({
+      event: "cabinet_auth_failed",
+      domain: "cabinet",
+      module: "cabinet/session-handler",
+      duration_ms: 4,
+      payload: {
+        endpoint: "/api/cabinet/session",
+        status_code: 401
+      },
+      error: {
+        code: "cabinet.unauthorized",
+        category: "validation",
+        retryable: false,
+        origin: "domain",
+        message: "unauthorized cabinet request"
+      }
+    });
+  });
+
+  const parsed = records();
+  const mainRecord = parsed.find((record) => record.domain === "cabinet" && record.event === "cabinet_auth_failed");
+  assert.ok(mainRecord, "expected cabinet auth failed record");
+  assert.equal(mainRecord.error.code, "cabinet.unauthorized");
+  assert.equal(mainRecord.meta.schema_violation ?? false, false);
+  assert.equal(
+    parsed.some((record) => record.event === "obs.schema_violation_detected"),
+    false
+  );
+});
+
 test("strict 4KB cap applies to full serialized event for adversarial input", () => {
   const { logger, lines, records } = createCaptureLogger();
   const hugeEvent = `${"a".repeat(3200)}_started`;

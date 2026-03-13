@@ -5,6 +5,7 @@ type HeaderMessages = {
   subtitle: string;
   landing: string;
   admin: string;
+  cabinet: string;
   languageLabel: string;
   themeLabel: string;
   themeLight: string;
@@ -102,10 +103,105 @@ type AdminMessages = {
   };
 };
 
+type CabinetMessages = {
+  login: {
+    heading: string;
+    description: string;
+    loginLabel: string;
+    passwordLabel: string;
+    submitIdle: string;
+    submitLoading: string;
+    checkingSession: string;
+    errors: {
+      invalidCredentials: string;
+      rateLimited: string;
+      generic: string;
+    };
+  };
+  library: {
+    heading: string;
+    description: string;
+    loading: string;
+    empty: string;
+    sessionLoading: string;
+    logout: string;
+    filters: {
+      searchLabel: string;
+      searchPlaceholder: string;
+      statusLabel: string;
+      typeLabel: string;
+      categoryLabel: string;
+      allStatuses: string;
+      allTypes: string;
+      allCategories: string;
+    };
+    statuses: {
+      draft: string;
+      working: string;
+      final: string;
+    };
+    fields: {
+      status: string;
+      type: string;
+      category: string;
+      theme: string;
+      source: string;
+      tags: string;
+      audience: string;
+      language: string;
+      access: string;
+      updated: string;
+      curated: string;
+    };
+    readMaterial: string;
+    openSource: string;
+    externalOnly: string;
+    readableInPortal: string;
+    helpfulForLecturer: string;
+    recommendedForPrep: string;
+    signedInAs: string;
+    adminStats: string;
+    errors: {
+      generic: string;
+    };
+  };
+  reader: {
+    loading: string;
+    backToLibrary: string;
+    sourceLink: string;
+    openExternally: string;
+    noInAppContent: string;
+    relatedHeading: string;
+    errors: {
+      generic: string;
+      notFound: string;
+    };
+    fields: {
+      status: string;
+      type: string;
+      category: string;
+      theme: string;
+      source: string;
+      audience: string;
+      language: string;
+      tags: string;
+      updated: string;
+      curated: string;
+    };
+    statuses: {
+      draft: string;
+      working: string;
+      final: string;
+    };
+    recommendedForPrep: string;
+  };
+};
+
 export type AppMessages = {
   header: HeaderMessages;
   landing: LandingMessages;
   admin: AdminMessages;
+  cabinet: CabinetMessages;
 };
 
 export const MESSAGES: Record<Locale, AppMessages> = {
@@ -115,6 +211,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
       subtitle: "Phase 1 foundation",
       landing: "Лендинг",
       admin: "Админ",
+      cabinet: "Кабинет",
       languageLabel: "Язык",
       themeLabel: "Тема",
       themeLight: "Светлая",
@@ -212,6 +309,99 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         error: "Не удалось загрузить лиды. Повторите попытку.",
         secretRequired: "Секрет обязателен."
       }
+    },
+    cabinet: {
+      login: {
+        heading: "Вход в кабинет",
+        description: "Внутренний кабинет команды для работы с seminar-материалами.",
+        loginLabel: "Логин или email",
+        passwordLabel: "Пароль",
+        submitIdle: "Войти",
+        submitLoading: "Входим...",
+        checkingSession: "Проверяем сессию...",
+        errors: {
+          invalidCredentials: "Неверный логин или пароль.",
+          rateLimited: "Слишком много попыток входа. Попробуйте позже.",
+          generic: "Не удалось выполнить вход. Повторите попытку."
+        }
+      },
+      library: {
+        heading: "Библиотека материалов",
+        description: "Curated слой поверх материалов из репозитория для внутренней команды.",
+        loading: "Загружаем материалы...",
+        empty: "Материалы пока не найдены.",
+        sessionLoading: "Проверяем доступ к кабинету...",
+        logout: "Выйти",
+        filters: {
+          searchLabel: "Поиск",
+          searchPlaceholder: "Название, summary, тег",
+          statusLabel: "Статус",
+          typeLabel: "Тип",
+          categoryLabel: "Категория",
+          allStatuses: "Все статусы",
+          allTypes: "Все типы",
+          allCategories: "Все категории"
+        },
+        statuses: {
+          draft: "Черновик",
+          working: "Рабочий",
+          final: "Опорный"
+        },
+        fields: {
+          status: "Статус",
+          type: "Тип",
+          category: "Категория",
+          theme: "Тема",
+          source: "Источник",
+          tags: "Теги",
+          audience: "Аудитория",
+          language: "Язык",
+          access: "Режим чтения",
+          updated: "Источник обновлён",
+          curated: "Проверено куратором"
+        },
+        readMaterial: "Читать в кабинете",
+        openSource: "Открыть источник",
+        externalOnly: "Открывается отдельно",
+        readableInPortal: "Можно читать прямо в кабинете",
+        helpfulForLecturer: "Подборка для подготовки лектора: кратко понять материал и быстро перейти к чтению.",
+        recommendedForPrep: "Рекомендуем для подготовки",
+        signedInAs: "Вы вошли как",
+        adminStats: "Материалов: {count}. Категории: {categories}.",
+        errors: {
+          generic: "Не удалось загрузить библиотеку материалов."
+        }
+      },
+      reader: {
+        loading: "Открываем материал...",
+        backToLibrary: "Назад к библиотеке",
+        sourceLink: "Открыть исходный файл",
+        openExternally: "Открыть отдельно",
+        noInAppContent: "Этот материал пока открывается во внешнем просмотре. В кабинете сохранены его карточка и контекст.",
+        relatedHeading: "Связанные материалы",
+        errors: {
+          generic: "Не удалось открыть материал.",
+          notFound: "Материал не найден или больше не доступен."
+        },
+        fields: {
+          status: "Статус",
+          type: "Тип",
+          category: "Категория",
+          theme: "Тема",
+          source: "Источник",
+          audience: "Аудитория",
+          language: "Язык",
+          tags: "Теги",
+          updated: "Источник обновлён",
+          curated: "Проверено куратором"
+        },
+        statuses: {
+          draft: "Черновик",
+          working: "Рабочий",
+          final: "Опорный"
+        },
+        recommendedForPrep: "Рекомендуем для подготовки"
+      }
     }
   },
   en: {
@@ -220,6 +410,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
       subtitle: "Phase 1 foundation",
       landing: "Landing",
       admin: "Admin",
+      cabinet: "Cabinet",
       languageLabel: "Language",
       themeLabel: "Theme",
       themeLight: "Light",
@@ -316,6 +507,99 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         unauthorized: "Invalid admin secret.",
         error: "Failed to load leads. Please try again.",
         secretRequired: "Admin secret is required."
+      }
+    },
+    cabinet: {
+      login: {
+        heading: "Cabinet login",
+        description: "Internal team cabinet for seminar materials.",
+        loginLabel: "Username or email",
+        passwordLabel: "Password",
+        submitIdle: "Sign in",
+        submitLoading: "Signing in...",
+        checkingSession: "Checking session...",
+        errors: {
+          invalidCredentials: "Invalid login or password.",
+          rateLimited: "Too many login attempts. Please try again later.",
+          generic: "Unable to sign in. Please try again."
+        }
+      },
+      library: {
+        heading: "Materials library",
+        description: "Curated library over repository materials for the internal team.",
+        loading: "Loading materials...",
+        empty: "No materials found yet.",
+        sessionLoading: "Checking cabinet access...",
+        logout: "Logout",
+        filters: {
+          searchLabel: "Search",
+          searchPlaceholder: "Title, summary, tag",
+          statusLabel: "Status",
+          typeLabel: "Type",
+          categoryLabel: "Category",
+          allStatuses: "All statuses",
+          allTypes: "All types",
+          allCategories: "All categories"
+        },
+        statuses: {
+          draft: "Draft",
+          working: "Working",
+          final: "Anchor"
+        },
+        fields: {
+          status: "Status",
+          type: "Type",
+          category: "Category",
+          theme: "Theme",
+          source: "Source",
+          tags: "Tags",
+          audience: "Audience",
+          language: "Language",
+          access: "Reading mode",
+          updated: "Source updated",
+          curated: "Curator reviewed"
+        },
+        readMaterial: "Read in cabinet",
+        openSource: "Open source",
+        externalOnly: "Opens separately",
+        readableInPortal: "Readable directly in cabinet",
+        helpfulForLecturer: "Curated lecturer prep layer: understand the material quickly and jump into reading.",
+        recommendedForPrep: "Recommended for lecture prep",
+        signedInAs: "Signed in as",
+        adminStats: "Materials: {count}. Categories: {categories}.",
+        errors: {
+          generic: "Unable to load the materials library."
+        }
+      },
+      reader: {
+        loading: "Opening material...",
+        backToLibrary: "Back to library",
+        sourceLink: "Open source file",
+        openExternally: "Open separately",
+        noInAppContent: "This material currently opens in an external viewer. Cabinet keeps its card and context available here.",
+        relatedHeading: "Related materials",
+        errors: {
+          generic: "Unable to open the material.",
+          notFound: "Material was not found or is no longer available."
+        },
+        fields: {
+          status: "Status",
+          type: "Type",
+          category: "Category",
+          theme: "Theme",
+          source: "Source",
+          audience: "Audience",
+          language: "Language",
+          tags: "Tags",
+          updated: "Source updated",
+          curated: "Curator reviewed"
+        },
+        statuses: {
+          draft: "Draft",
+          working: "Working",
+          final: "Anchor"
+        },
+        recommendedForPrep: "Recommended for lecture prep"
       }
     }
   }

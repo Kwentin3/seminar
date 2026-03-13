@@ -1,3 +1,6 @@
+# Docker smoke attachment for the live production contour.
+# Useful for parity/smoke gates, but not a substitute for the full go-live
+# sequence with DB backup, cabinet bootstrap discipline, and rollback prep.
 name: seminar-ghcr-smoke
 
 services:

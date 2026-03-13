@@ -42,6 +42,19 @@ export function Header() {
             >
               {messages.header.admin}
             </NavLink>
+            <NavLink
+              to="/cabinet"
+              className={({ isActive }) =>
+                classNames(
+                  "rounded-lg px-3 py-2 text-sm font-medium",
+                  isActive
+                    ? "bg-sky-600 text-white"
+                    : "bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+                )
+              }
+            >
+              {messages.header.cabinet}
+            </NavLink>
           </nav>
 
           <div className="flex items-center gap-1 rounded-lg border border-slate-300 p-1 dark:border-slate-700" role="group" aria-label={messages.header.languageLabel}>

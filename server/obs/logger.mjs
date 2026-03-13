@@ -14,14 +14,14 @@ import process from "node:process";
 import { getRequestContext } from "./request-context.mjs";
 
 const LEVELS = new Set(["debug", "info", "warn", "error"]);
-const DOMAINS = new Set(["runtime", "content", "landing", "leads", "admin", "obs"]);
+const DOMAINS = new Set(["runtime", "content", "landing", "leads", "admin", "cabinet", "obs"]);
 const EVENT_REGEX = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 const EVENT_TENSE_REGEX =
   /(_started|_completed|_failed|_selected|_limited|_detected|_loaded|_succeeded|_denied|_degraded)$/;
 const MODULE_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*(\/[a-z0-9]+(-[a-z0-9]+)*)*$/;
 const MAX_EVENT_BYTES = 4 * 1024;
 const REDACTED_VALUE = "***redacted***";
-const ERROR_CODE_NAMESPACE_PREFIXES = ["content.", "landing.", "leads.", "admin.", "runtime.", "obs."];
+const ERROR_CODE_NAMESPACE_PREFIXES = ["content.", "landing.", "leads.", "admin.", "cabinet.", "runtime.", "obs."];
 
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{6,}\d)/g;
@@ -223,7 +223,15 @@ function normalizeErrorContract(level, inputError) {
 }
 
 function requiresRequestId(event, domain) {
-  return domain === "runtime" || domain === "leads" || domain === "admin" || domain === "content" || domain === "landing" || event.startsWith("http_");
+  return (
+    domain === "runtime" ||
+    domain === "leads" ||
+    domain === "admin" ||
+    domain === "cabinet" ||
+    domain === "content" ||
+    domain === "landing" ||
+    event.startsWith("http_")
+  );
 }
 
 function toSerializableRecord(record) {
