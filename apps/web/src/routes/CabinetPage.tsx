@@ -7,11 +7,14 @@ import type {
   CabinetUser
 } from "@seminar/contracts";
 import { SectionCard } from "@seminar/ui";
+import type { ReactNode } from "react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import type { AppMessages } from "../app/messages";
 import { useAppContext } from "../app/useAppContext";
 
 type CabinetStatus = "session-loading" | "loading" | "ready" | "error";
+type LibraryMessages = AppMessages["cabinet"]["library"];
 
 export function CabinetPage() {
   const navigate = useNavigate();
@@ -126,6 +129,7 @@ export function CabinetPage() {
         item.title,
         item.summary ?? "",
         item.category,
+        item.theme ?? "",
         item.source_path,
         ...item.tags
       ]
@@ -135,6 +139,22 @@ export function CabinetPage() {
       return haystack.includes(normalizedSearch);
     });
   }, [categoryFilter, deferredSearch, items, statusFilter, typeFilter]);
+
+  const recommendedItems = useMemo(
+    () => filteredItems.filter((item) => item.recommended_for_lecture_prep),
+    [filteredItems]
+  );
+  const secondaryItems = useMemo(
+    () => filteredItems.filter((item) => !item.recommended_for_lecture_prep),
+    [filteredItems]
+  );
+  const usingDefaultView =
+    deferredSearch.trim().length === 0 &&
+    statusFilter === "all" &&
+    typeFilter === "all" &&
+    categoryFilter === "all";
+  const showPrepSections =
+    usingDefaultView && recommendedItems.length > 0 && secondaryItems.length > 0;
 
   const onLogout = async () => {
     await fetch("/api/cabinet/logout", {
@@ -166,8 +186,8 @@ export function CabinetPage() {
   return (
     <SectionCard title={messages.cabinet.library.heading} description={messages.cabinet.library.description}>
       <div className="space-y-5">
-        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1 text-sm text-slate-700 dark:text-slate-200">
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/60 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
             <p>
               {messages.cabinet.library.signedInAs} <span className="font-semibold">{user?.username}</span>
             </p>
@@ -178,20 +198,19 @@ export function CabinetPage() {
                   .replace("{categories}", stats.categories.join(", "))}
               </p>
             ) : null}
+            <p className="max-w-3xl text-slate-600 dark:text-slate-300">
+              {messages.cabinet.library.helpfulForLecturer}
+            </p>
           </div>
 
           <button
             type="button"
             onClick={onLogout}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:text-slate-100"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             {messages.cabinet.library.logout}
           </button>
         </div>
-
-        <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-          {messages.cabinet.library.helpfulForLecturer}
-        </p>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="space-y-1">
@@ -208,6 +227,7 @@ export function CabinetPage() {
           <label className="space-y-1">
             <span className="text-sm font-medium">{messages.cabinet.library.filters.statusLabel}</span>
             <select
+              aria-label={messages.cabinet.library.filters.statusLabel}
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
@@ -256,129 +276,203 @@ export function CabinetPage() {
 
         {filteredItems.length === 0 ? (
           <p className="text-sm text-slate-700 dark:text-slate-200">{messages.cabinet.library.empty}</p>
-        ) : (
-          <div className="space-y-3">
-            {filteredItems.map((item) => (
-              <article
-                key={item.id}
-                className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700"
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{item.title}</h3>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClassName(item.material_status)}`}
-                    >
-                      {getStatusLabel(messages.cabinet.library.statuses, item.material_status)}
-                    </span>
-                    {item.recommended_for_lecture_prep ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                        {messages.cabinet.library.recommendedForPrep}
-                      </span>
-                    ) : null}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        item.reading_mode === "in_app"
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                      }`}
-                    >
-                      {item.reading_mode === "in_app"
-                        ? messages.cabinet.library.readableInPortal
-                        : messages.cabinet.library.externalOnly}
-                    </span>
-                  </div>
-                  {item.summary ? (
-                    <p className="text-sm text-slate-700 dark:text-slate-200">{item.summary}</p>
-                  ) : null}
-                </div>
-
-                <dl className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-2">
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.status}</dt>
-                    <dd>{getStatusLabel(messages.cabinet.library.statuses, item.material_status)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.type}</dt>
-                    <dd>{item.material_type}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.category}</dt>
-                    <dd>{item.category}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.theme}</dt>
-                    <dd>{item.theme ?? item.category}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.audience}</dt>
-                    <dd>{item.audience}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.language}</dt>
-                    <dd>{item.language}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.access}</dt>
-                    <dd>
-                      {item.reading_mode === "in_app"
-                        ? messages.cabinet.library.readableInPortal
-                        : messages.cabinet.library.externalOnly}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium">{messages.cabinet.library.fields.curated}</dt>
-                    <dd>{item.curation_reviewed_at ?? "-"}</dd>
-                  </div>
-                  <div className="md:col-span-2">
-                    <dt className="font-medium">{messages.cabinet.library.fields.source}</dt>
-                    <dd className="break-all font-mono text-xs">{item.source_path}</dd>
-                  </div>
-                  <div className="md:col-span-2">
-                    <dt className="font-medium">{messages.cabinet.library.fields.updated}</dt>
-                    <dd>{item.source_updated_at ?? "-"}</dd>
-                  </div>
-                  <div className="md:col-span-2">
-                    <dt className="font-medium">{messages.cabinet.library.fields.tags}</dt>
-                    <dd className="flex flex-wrap gap-2">
-                      {item.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full border border-slate-300 px-2 py-0.5 text-xs dark:border-slate-700"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="flex flex-wrap gap-3">
-                  {item.read_url ? (
-                    <Link
-                      to={item.read_url}
-                      className="inline-flex rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-900"
-                    >
-                      {messages.cabinet.library.readMaterial}
-                    </Link>
-                  ) : null}
-
-                  <a
-                    href={item.open_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:text-slate-100 dark:focus:ring-sky-900"
-                  >
-                    {messages.cabinet.library.openSource}
-                  </a>
-                </div>
-              </article>
-            ))}
+        ) : showPrepSections ? (
+          <div className="space-y-6">
+            <MaterialSection
+              heading={messages.cabinet.library.prepStartHeading}
+              description={messages.cabinet.library.prepStartDescription}
+              items={recommendedItems}
+              messages={messages.cabinet.library}
+            />
+            <MaterialSection
+              heading={messages.cabinet.library.restHeading}
+              description={messages.cabinet.library.restDescription}
+              items={secondaryItems}
+              messages={messages.cabinet.library}
+            />
           </div>
+        ) : (
+          <MaterialSection items={filteredItems} messages={messages.cabinet.library} />
         )}
       </div>
     </SectionCard>
   );
+}
+
+function MaterialSection({
+  heading,
+  description,
+  items,
+  messages
+}: {
+  heading?: string;
+  description?: string;
+  items: CabinetMaterial[];
+  messages: LibraryMessages;
+}) {
+  return (
+    <section className="space-y-3">
+      {heading ? (
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{heading}</h3>
+          {description ? <p className="text-sm text-slate-600 dark:text-slate-300">{description}</p> : null}
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        {items.map((item) => (
+          <MaterialCard key={item.id} item={item} messages={messages} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MaterialCard({ item, messages }: { item: CabinetMaterial; messages: LibraryMessages }) {
+  const visibleTags = item.tags.slice(0, 4);
+  const remainingTagCount = Math.max(item.tags.length - visibleTags.length, 0);
+  const prepCue = item.recommended_for_lecture_prep ? getPrepCue(messages.prepCues, item.material_status) : null;
+  const quietMeta = [item.source_updated_at, item.curation_reviewed_at].filter(Boolean);
+
+  return (
+    <article
+      className={`space-y-4 rounded-2xl border p-4 shadow-sm transition-colors dark:shadow-none ${
+        item.recommended_for_lecture_prep
+          ? "border-sky-200 bg-sky-50/40 dark:border-sky-900/80 dark:bg-sky-950/20"
+          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+      }`}
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClassName(item.material_status)}`}>
+            {getStatusLabel(messages.statuses, item.material_status)}
+          </span>
+          {item.recommended_for_lecture_prep ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              {messages.recommendedForPrep}
+            </span>
+          ) : null}
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              item.reading_mode === "in_app"
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            }`}
+          >
+            {item.reading_mode === "in_app" ? messages.readableInPortal : messages.externalOnly}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{item.title}</h3>
+          {prepCue ? <p className="text-sm text-slate-700 dark:text-slate-200">{prepCue}</p> : null}
+          {item.summary ? <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">{item.summary}</p> : null}
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <SecondarySignal>{item.theme ?? item.category}</SecondarySignal>
+          <SecondarySignal>{item.material_type}</SecondarySignal>
+        </div>
+
+        {quietMeta.length > 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {item.curation_reviewed_at ? `${messages.fields.curated}: ${item.curation_reviewed_at}` : ""}
+            {item.curation_reviewed_at && item.source_updated_at ? " · " : ""}
+            {item.source_updated_at ? `${messages.fields.updated}: ${item.source_updated_at}` : ""}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        {item.read_url ? (
+          <Link
+            to={item.read_url}
+            className="inline-flex rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:ring-sky-900"
+          >
+            {messages.readMaterial}
+          </Link>
+        ) : null}
+
+        <a
+          href={item.open_url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:text-slate-100 dark:focus:ring-sky-900"
+        >
+          {messages.openSource}
+        </a>
+      </div>
+
+      <details className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+        <summary className="cursor-pointer list-none text-sm font-medium text-slate-700 dark:text-slate-100">
+          {messages.contextToggle}
+        </summary>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{messages.contextHint}</p>
+
+        <dl className="mt-3 grid gap-3 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-2">
+          <div>
+            <dt className="font-medium">{messages.fields.theme}</dt>
+            <dd>{item.theme ?? item.category}</dd>
+          </div>
+          <div>
+            <dt className="font-medium">{messages.fields.category}</dt>
+            <dd>{item.category}</dd>
+          </div>
+          <div>
+            <dt className="font-medium">{messages.fields.audience}</dt>
+            <dd>{item.audience}</dd>
+          </div>
+          <div>
+            <dt className="font-medium">{messages.fields.language}</dt>
+            <dd>{item.language}</dd>
+          </div>
+          <div className="md:col-span-2">
+            <dt className="font-medium">{messages.fields.source}</dt>
+            <dd className="break-all font-mono text-xs text-slate-500 dark:text-slate-400">{item.source_path}</dd>
+          </div>
+          <div className="md:col-span-2">
+            <dt className="font-medium">{messages.fields.tags}</dt>
+            <dd className="flex flex-wrap gap-2">
+              {visibleTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-300 px-2 py-0.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                >
+                  {tag}
+                </span>
+              ))}
+              {remainingTagCount > 0 ? (
+                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                  +{remainingTagCount}
+                </span>
+              ) : null}
+            </dd>
+          </div>
+        </dl>
+      </details>
+    </article>
+  );
+}
+
+function SecondarySignal({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+      {children}
+    </span>
+  );
+}
+
+function getPrepCue(
+  messages: { draft: string; working: string; final: string },
+  status: CabinetMaterialStatus
+) {
+  if (status === "final") {
+    return messages.final;
+  }
+  if (status === "working") {
+    return messages.working;
+  }
+  return messages.draft;
 }
 
 function getStatusLabel(

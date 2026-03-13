@@ -35,6 +35,7 @@ async function run() {
     ]);
 
     await page.getByRole("heading", { name: /Библиотека материалов|Materials library/ }).waitFor();
+    await page.getByText(/С чего начать|Start here/).waitFor();
     await page.getByLabel(/Статус|Status/).selectOption("final");
     await page.locator("article").first().getByText(/Опорный|Anchor/).first().waitFor();
     await page.locator("article").first().getByText(/Проверено куратором|Curator reviewed/).waitFor();
@@ -46,6 +47,8 @@ async function run() {
     ]);
 
     await page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).waitFor();
+    await page.getByText(/Коротко о материале|Quick facts/).waitFor();
+    await page.getByText(/Контекст материала|Material context/).waitFor();
     await page.getByText(/Проверено куратором|Curator reviewed/).first().waitFor();
     await page.locator("article").first().waitFor();
 

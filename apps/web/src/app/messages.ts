@@ -153,6 +153,17 @@ type CabinetMessages = {
       updated: string;
       curated: string;
     };
+    prepStartHeading: string;
+    prepStartDescription: string;
+    restHeading: string;
+    restDescription: string;
+    contextToggle: string;
+    contextHint: string;
+    prepCues: {
+      final: string;
+      working: string;
+      draft: string;
+    };
     readMaterial: string;
     openSource: string;
     externalOnly: string;
@@ -192,6 +203,14 @@ type CabinetMessages = {
       draft: string;
       working: string;
       final: string;
+    };
+    contextToggle: string;
+    contextHint: string;
+    quickFactsHeading: string;
+    prepCues: {
+      final: string;
+      working: string;
+      draft: string;
     };
     recommendedForPrep: string;
   };
@@ -360,6 +379,17 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           updated: "Источник обновлён",
           curated: "Проверено куратором"
         },
+        prepStartHeading: "С чего начать",
+        prepStartDescription: "Опорные и рекомендованные материалы, с которых проще начать подготовку.",
+        restHeading: "Остальная библиотека",
+        restDescription: "Дополнительный контекст, рабочие материалы и справочные источники.",
+        contextToggle: "Контекст и источник",
+        contextHint: "Показать источник, теги и служебные детали",
+        prepCues: {
+          final: "Можно брать первым как текущую опору.",
+          working: "Хорошая рабочая версия для подготовки.",
+          draft: "Читайте как дополнительный контекст."
+        },
         readMaterial: "Читать в кабинете",
         openSource: "Открыть источник",
         externalOnly: "Открывается отдельно",
@@ -399,6 +429,14 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           draft: "Черновик",
           working: "Рабочий",
           final: "Опорный"
+        },
+        contextToggle: "Контекст материала",
+        contextHint: "Источник, теги и служебные поля",
+        quickFactsHeading: "Коротко о материале",
+        prepCues: {
+          final: "Текущая опора: можно сразу входить в текст.",
+          working: "Рабочая версия: полезно читать для подготовки.",
+          draft: "Дополнительный контекст, а не главная опора."
         },
         recommendedForPrep: "Рекомендуем для подготовки"
       }
@@ -559,6 +597,17 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           updated: "Source updated",
           curated: "Curator reviewed"
         },
+        prepStartHeading: "Start here",
+        prepStartDescription: "Anchor and recommended materials that are easiest to start lecture prep with.",
+        restHeading: "More materials",
+        restDescription: "Additional context, working notes, and supporting references.",
+        contextToggle: "Context and source",
+        contextHint: "Show source path, tags, and secondary metadata",
+        prepCues: {
+          final: "Safe to start with first as the current anchor.",
+          working: "Useful working version for lecture prep.",
+          draft: "Read as supporting context."
+        },
         readMaterial: "Read in cabinet",
         openSource: "Open source",
         externalOnly: "Opens separately",
@@ -598,6 +647,14 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           draft: "Draft",
           working: "Working",
           final: "Anchor"
+        },
+        contextToggle: "Material context",
+        contextHint: "Source, tags, and secondary metadata",
+        quickFactsHeading: "Quick facts",
+        prepCues: {
+          final: "Current anchor: you can move straight into the text.",
+          working: "Working version: useful for lecture prep.",
+          draft: "Supporting context rather than the main anchor."
         },
         recommendedForPrep: "Recommended for lecture prep"
       }
