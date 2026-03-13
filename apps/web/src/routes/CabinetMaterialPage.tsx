@@ -4,11 +4,9 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
-import type { AppMessages } from "../app/messages";
 import { useAppContext } from "../app/useAppContext";
 
 type ReaderStatus = "loading" | "ready" | "error" | "not-found";
-type ReaderMessages = AppMessages["cabinet"]["reader"];
 
 export function CabinetMaterialPage() {
   const navigate = useNavigate();
