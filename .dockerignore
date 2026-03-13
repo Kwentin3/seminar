@@ -3,7 +3,12 @@
 .wrangler
 node_modules
 **/node_modules
+# Runtime cabinet content depends on docs/seminar being present inside the image.
+# Keep most docs out of the build context, but do not strip seminar materials.
 docs
+!docs/
+!docs/seminar/
+!docs/seminar/**
 ops
 data
 .tmp-*
