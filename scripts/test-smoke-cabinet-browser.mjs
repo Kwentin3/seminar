@@ -83,6 +83,18 @@ async function run() {
       await page.waitForURL(/\/cabinet\/admin\/users(?:\?|$)/);
       await page.getByRole("heading", { name: /Пользователи кабинета|Cabinet users/ }).waitFor();
       await page.getByRole("button", { name: /Создать lecturer|Create lecturer/ }).waitFor();
+      await page.getByRole("link", { name: /К LLM-настройкам|Open LLM settings/ }).click();
+      await page.waitForURL(/\/cabinet\/admin\/llm-simplify(?:\?|$)/);
+      await page.getByRole("heading", { name: /LLM-настройки reader-а|Reader LLM settings/ }).waitFor();
+      await page.getByText(/Effective config и guardrails|Effective config and guardrails/).waitFor();
+      await page.getByLabel(/Timeout budget|Timeout budget/).waitFor();
+      await page.getByLabel(/Single-pass input limit|Single-pass input limit/).waitFor();
+      await page.getByLabel(/Поведение для oversized документа|Oversized document behavior/).waitFor();
+      await Promise.all([
+        page.waitForURL(/\/cabinet\/admin\/users(?:\?|$)/),
+        page.getByRole("link", { name: /Пользователи|Users/ }).click()
+      ]);
+      await page.getByRole("heading", { name: /Пользователи кабинета|Cabinet users/ }).waitFor();
       await Promise.all([
         page.waitForURL(/\/cabinet(?:\?|$)/),
         page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()

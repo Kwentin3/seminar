@@ -119,16 +119,13 @@ test("cabinet simplify does not send max_tokens when no explicit output cap is c
   assert.equal("max_tokens" in provider.lastRequest(), false);
 });
 
-test("cabinet simplify persists typed timeout failures and emits redacted diagnostics", async (t) => {
+test("cabinet simplify persists typed provider failures and emits redacted diagnostics", async (t) => {
   const provider = await startStubDeepSeek(t, {
-    delayMs: 120,
-    content: "# Упрощённый пересказ\n\nПоздний ответ провайдера."
+    mode: "rate_limit"
   });
   const server = await startServer(t, {
     DEEPSEEK_API_KEY: "test-deepseek-key",
-    DEEPSEEK_BASE_URL: provider.baseUrl,
-    LLM_SIMPLIFY_TIMEOUT_MS: "40",
-    LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS: "900"
+    DEEPSEEK_BASE_URL: provider.baseUrl
   });
 
   const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
@@ -147,8 +144,8 @@ test("cabinet simplify persists typed timeout failures and emits redacted diagno
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.state.status, "failed");
-  assert.equal(payload.state.error_code, "timeout");
-  assert.match(payload.state.error_message, /слишком много времени/i);
+  assert.equal(payload.state.error_code, "rate_limit");
+  assert.match(payload.state.error_message, /ограничил запросы/i);
 
   const stateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
     headers: {
@@ -158,16 +155,16 @@ test("cabinet simplify persists typed timeout failures and emits redacted diagno
   assert.equal(stateResponse.status, 200);
   const statePayload = await stateResponse.json();
   assert.equal(statePayload.state.status, "failed");
-  assert.equal(statePayload.state.error_code, "timeout");
+  assert.equal(statePayload.state.error_code, "rate_limit");
   assert.equal(statePayload.state.can_regenerate, true);
 
   await waitForCondition(() => server.getStdout().includes("cabinet_material_simplify_provider_call_failed"));
   const stdout = server.getStdout();
   assert.match(stdout, /"event":"cabinet_material_simplify_provider_call_failed"/);
-  assert.match(stdout, /"error_code":"timeout"/);
-  assert.match(stdout, /"abort_fired":true/);
+  assert.match(stdout, /"error_code":"rate_limit"/);
+  assert.match(stdout, /"provider_http_status":429/);
   assert.doesNotMatch(stdout, /Исходный документ:/);
-  assert.doesNotMatch(stdout, /Поздний ответ провайдера/);
+  assert.doesNotMatch(stdout, /Authorization: Bearer/);
 });
 
 test("cabinet simplify marks truncated provider completions as ready-with-warning", async (t) => {
@@ -295,6 +292,10 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
   assert.equal(settingsResponse.status, 200);
   const settingsPayload = await settingsResponse.json();
   assert.match(settingsPayload.settings.user_prompt_template, /\{\{material_title\}\}/);
+  assert.equal(settingsPayload.effective_config.request_timeout_ms, 75000);
+  assert.equal(settingsPayload.effective_config.max_source_chars, 20000);
+  assert.equal(settingsPayload.effective_config.oversized_behavior, "block");
+  assert.equal(settingsPayload.recent_failure, null);
 
   const updateResponse = await fetch(`${server.baseUrl}/api/cabinet/admin/llm-simplify/settings`, {
     method: "PUT",
@@ -315,13 +316,21 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
         "{{source_markdown}}"
       ].join("\n"),
       temperature: settingsPayload.settings.temperature,
-      max_output_tokens: settingsPayload.settings.max_output_tokens
+      max_output_tokens: settingsPayload.settings.max_output_tokens,
+      request_timeout_ms: 62000,
+      max_source_chars: 20000,
+      oversized_behavior: "block"
     })
   });
   assert.equal(updateResponse.status, 200);
   const updatePayload = await updateResponse.json();
   assert.notEqual(updatePayload.settings.prompt_version, settingsPayload.settings.prompt_version);
   assert.match(updatePayload.settings.user_prompt_template, /CUSTOM TEMPLATE/);
+  assert.equal(updatePayload.settings.request_timeout_ms, 62000);
+  assert.equal(updatePayload.settings.max_source_chars, 20000);
+  assert.equal(updatePayload.effective_config.request_timeout_ms, 62000);
+  assert.equal(updatePayload.effective_config.max_source_chars, 20000);
+  assert.equal(updatePayload.effective_config.oversized_behavior, "block");
 
   const staleStateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
     headers: {
@@ -349,6 +358,77 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
   assert.match(provider.lastRequest().messages[1].content, /CUSTOM TEMPLATE/);
   assert.match(provider.lastRequest().messages[1].content, new RegExp(`Slug: ${markdownItem.slug}`));
   assert.doesNotMatch(provider.lastRequest().messages[1].content, /\{\{material_title\}\}/);
+});
+
+test("cabinet simplify settings expose effective config and block oversized sources before provider call", async (t) => {
+  const provider = await startStubDeepSeek(t);
+  const server = await startServer(t, {
+    DEEPSEEK_API_KEY: "test-deepseek-key",
+    DEEPSEEK_BASE_URL: provider.baseUrl
+  });
+
+  const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
+  const materials = await fetchMaterials(server.baseUrl, adminCookie);
+  const markdownItem = materials.items.find((item) => item.reading_mode === "in_app");
+  assert.ok(markdownItem, "expected markdown item");
+
+  const settingsResponse = await fetch(`${server.baseUrl}/api/cabinet/admin/llm-simplify/settings`, {
+    headers: {
+      Cookie: adminCookie
+    }
+  });
+  assert.equal(settingsResponse.status, 200);
+  const settingsPayload = await settingsResponse.json();
+
+  const updateResponse = await fetch(`${server.baseUrl}/api/cabinet/admin/llm-simplify/settings`, {
+    method: "PUT",
+    headers: {
+      Cookie: adminCookie,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      feature_enabled: settingsPayload.settings.feature_enabled,
+      model: settingsPayload.settings.model,
+      system_prompt: settingsPayload.settings.system_prompt,
+      user_prompt_template: settingsPayload.settings.user_prompt_template,
+      temperature: settingsPayload.settings.temperature,
+      max_output_tokens: null,
+      request_timeout_ms: 60000,
+      max_source_chars: 2000,
+      oversized_behavior: "block"
+    })
+  });
+  assert.equal(updateResponse.status, 200);
+  const updatePayload = await updateResponse.json();
+  assert.equal(updatePayload.effective_config.max_output_tokens, null);
+  assert.equal(updatePayload.effective_config.request_timeout_ms, 60000);
+  assert.equal(updatePayload.effective_config.max_source_chars, 2000);
+  assert.equal(updatePayload.effective_config.hard_max_source_chars, 25000);
+
+  const simplifyResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+    method: "POST",
+    headers: {
+      Cookie: adminCookie,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ force: false })
+  });
+  assert.equal(simplifyResponse.status, 200);
+  const simplifyPayload = await simplifyResponse.json();
+  assert.equal(simplifyPayload.state.status, "failed");
+  assert.equal(simplifyPayload.state.error_code, "content_too_large");
+  assert.match(simplifyPayload.state.error_message, /single-pass|лимит|слишком длин/i);
+  assert.equal(provider.requestCount(), 0);
+
+  const refreshedSettingsResponse = await fetch(`${server.baseUrl}/api/cabinet/admin/llm-simplify/settings`, {
+    headers: {
+      Cookie: adminCookie
+    }
+  });
+  assert.equal(refreshedSettingsResponse.status, 200);
+  const refreshedSettingsPayload = await refreshedSettingsResponse.json();
+  assert.equal(refreshedSettingsPayload.recent_failure.error_code, "content_too_large");
+  assert.equal(refreshedSettingsPayload.recent_failure.material_slug, markdownItem.slug);
 });
 
 async function startStubDeepSeek(t, options = {}) {

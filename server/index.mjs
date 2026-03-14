@@ -604,7 +604,9 @@ app.get("/api/cabinet/admin/llm-simplify/settings", (request, response) => {
     return response.status(200).json({
       ok: true,
       key_configured: result.key_configured,
-      settings: result.settings
+      settings: result.settings,
+      effective_config: result.effective_config,
+      recent_failure: result.recent_failure
     });
   } catch {
     logger.error({
@@ -653,7 +655,9 @@ app.put("/api/cabinet/admin/llm-simplify/settings", (request, response) => {
     return response.status(200).json({
       ok: true,
       key_configured: result.key_configured,
-      settings: result.settings
+      settings: result.settings,
+      effective_config: result.effective_config,
+      recent_failure: result.recent_failure
     });
   } catch {
     logger.error({

@@ -10,6 +10,9 @@ import {
 const FEATURE_KIND = "simple_retell";
 const SETTINGS_ROW_ID = "default";
 const STALE_GENERATING_MULTIPLIER = 2;
+const MIN_REQUEST_TIMEOUT_MS = 30_000;
+const MIN_MAX_SOURCE_CHARS = 2_000;
+const DEFAULT_OVERSIZED_BEHAVIOR = "block";
 const inflightGenerations = new Map();
 
 function readString(value) {
@@ -43,6 +46,10 @@ function readNullablePositiveInt(value) {
   }
 
   return value;
+}
+
+function readOversizedBehavior(value) {
+  return value === "allow_with_warning" ? "allow_with_warning" : value === "block" ? "block" : null;
 }
 
 function sha256Hex(value) {
@@ -203,7 +210,7 @@ function isGeneratingStale(row, llmConfig, now = Date.now()) {
     return false;
   }
 
-  return now - updatedAt > llmConfig.requestTimeoutMs * STALE_GENERATING_MULTIPLIER;
+  return now - updatedAt > llmConfig.defaultRequestTimeoutMs * STALE_GENERATING_MULTIPLIER;
 }
 
 function normalizeStoredError(error) {
@@ -267,7 +274,7 @@ function normalizeStoredError(error) {
   if (code === "content_too_large") {
     return {
       error_code: code,
-      error_message: "Документ слишком длинный для текущего MVP-режима."
+      error_message: readString(error.message) ?? "Документ слишком длинный для текущего MVP-режима."
     };
   }
 
@@ -298,6 +305,55 @@ function getEffectiveMaxOutputTokens(settings, llmConfig) {
   }
 
   return null;
+}
+
+function getEffectiveRequestTimeoutMs(settings, llmConfig) {
+  const configured = typeof settings.request_timeout_ms === "number" && Number.isInteger(settings.request_timeout_ms)
+    ? settings.request_timeout_ms
+    : llmConfig.defaultRequestTimeoutMs;
+
+  return Math.min(configured, llmConfig.hardMaxRequestTimeoutMs);
+}
+
+function getEffectiveMaxSourceChars(settings, llmConfig) {
+  const configured = typeof settings.max_source_chars === "number" && Number.isInteger(settings.max_source_chars)
+    ? settings.max_source_chars
+    : llmConfig.defaultMaxSourceChars;
+
+  return Math.min(configured, llmConfig.hardMaxSourceChars);
+}
+
+function assessSourceSize(markdownLength, settings, llmConfig) {
+  const configuredLimit = getEffectiveMaxSourceChars(settings, llmConfig);
+  const hardLimit = llmConfig.hardMaxSourceChars;
+
+  if (markdownLength > hardLimit) {
+    return {
+      block: true,
+      oversized: true,
+      reason: "hard_guardrail",
+      configured_limit: configuredLimit,
+      hard_limit: hardLimit
+    };
+  }
+
+  if (markdownLength > configuredLimit && settings.oversized_behavior === "block") {
+    return {
+      block: true,
+      oversized: true,
+      reason: "configured_limit",
+      configured_limit: configuredLimit,
+      hard_limit: hardLimit
+    };
+  }
+
+  return {
+    block: false,
+    oversized: markdownLength > configuredLimit,
+    reason: markdownLength > configuredLimit ? "allow_with_warning" : null,
+    configured_limit: configuredLimit,
+    hard_limit: hardLimit
+  };
 }
 
 function getProviderDiagnostics(error) {
@@ -331,6 +387,36 @@ function getProviderDiagnostics(error) {
       typeof diagnostics.response_body_length === "number" && Number.isFinite(diagnostics.response_body_length)
         ? diagnostics.response_body_length
         : null
+  };
+}
+
+function readLatestFailedSimplification(database) {
+  return database
+    .prepare(
+      `SELECT
+        materials.slug AS material_slug,
+        material_simplifications.error_code AS error_code,
+        material_simplifications.updated_at AS updated_at
+       FROM material_simplifications
+       JOIN materials ON materials.id = material_simplifications.material_id
+       WHERE material_simplifications.feature_kind = ?
+         AND material_simplifications.status = 'failed'
+         AND material_simplifications.error_code IS NOT NULL
+       ORDER BY datetime(material_simplifications.updated_at) DESC
+       LIMIT 1`
+    )
+    .get(FEATURE_KIND);
+}
+
+function mapRecentFailureRow(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    material_slug: readString(row.material_slug),
+    error_code: readString(row.error_code),
+    updated_at: readString(row.updated_at)
   };
 }
 
@@ -447,7 +533,7 @@ function readLatestRowForMaterial(database, materialId) {
     .get(materialId, FEATURE_KIND);
 }
 
-function readSettingsRow(database) {
+function readSettingsRow(database, llmConfig) {
   const defaultPromptConfig = getDefaultSimplifyPromptConfig();
   const row = database
     .prepare(
@@ -460,6 +546,9 @@ function readSettingsRow(database) {
         llm_simplify_settings.prompt_version,
         llm_simplify_settings.temperature,
         llm_simplify_settings.max_output_tokens,
+        llm_simplify_settings.request_timeout_ms,
+        llm_simplify_settings.max_source_chars,
+        llm_simplify_settings.oversized_behavior,
         llm_simplify_settings.updated_at,
         users.username AS updated_by_username
        FROM llm_simplify_settings
@@ -486,14 +575,20 @@ function readSettingsRow(database) {
         prompt_version,
         temperature,
         max_output_tokens,
+        request_timeout_ms,
+        max_source_chars,
+        oversized_behavior,
         updated_at,
         updated_by_user_id
-      ) VALUES (?, 'deepseek', 1, 'deepseek-chat', ?, ?, 'v1', NULL, NULL, ?, NULL)`
+      ) VALUES (?, 'deepseek', 1, 'deepseek-chat', ?, ?, 'v1', NULL, NULL, ?, ?, ?, ?, NULL)`
     )
     .run(
       SETTINGS_ROW_ID,
       defaultPromptConfig.system_prompt,
       defaultPromptConfig.user_prompt_template,
+      llmConfig.defaultRequestTimeoutMs,
+      llmConfig.defaultMaxSourceChars,
+      DEFAULT_OVERSIZED_BEHAVIOR,
       now
     );
 
@@ -508,6 +603,9 @@ function readSettingsRow(database) {
         prompt_version,
         temperature,
         max_output_tokens,
+        request_timeout_ms,
+        max_source_chars,
+        oversized_behavior,
         updated_at,
         NULL AS updated_by_username
        FROM llm_simplify_settings
@@ -517,7 +615,7 @@ function readSettingsRow(database) {
     .get(SETTINGS_ROW_ID);
 }
 
-function mapSettingsRow(row) {
+function mapSettingsRow(row, llmConfig) {
   const defaultPromptConfig = getDefaultSimplifyPromptConfig();
   return {
     provider: readString(row.provider) ?? "deepseek",
@@ -531,6 +629,15 @@ function mapSettingsRow(row) {
       typeof row.max_output_tokens === "number" && Number.isInteger(row.max_output_tokens) && row.max_output_tokens > 0
         ? row.max_output_tokens
         : null,
+    request_timeout_ms:
+      typeof row.request_timeout_ms === "number" && Number.isInteger(row.request_timeout_ms) && row.request_timeout_ms > 0
+        ? row.request_timeout_ms
+        : llmConfig.defaultRequestTimeoutMs,
+    max_source_chars:
+      typeof row.max_source_chars === "number" && Number.isInteger(row.max_source_chars) && row.max_source_chars > 0
+        ? row.max_source_chars
+        : llmConfig.defaultMaxSourceChars,
+    oversized_behavior: readOversizedBehavior(row.oversized_behavior) ?? DEFAULT_OVERSIZED_BEHAVIOR,
     updated_at: readString(row.updated_at) ?? new Date().toISOString(),
     updated_by_username: readString(row.updated_by_username)
   };
@@ -656,6 +763,30 @@ function buildSettingsPayload(settings, keyConfigured) {
   };
 }
 
+function buildEffectiveConfig(settings, keyConfigured, llmConfig) {
+  return {
+    provider: settings.provider,
+    model: settings.model,
+    key_configured: keyConfigured,
+    request_timeout_ms: getEffectiveRequestTimeoutMs(settings, llmConfig),
+    max_output_tokens: getEffectiveMaxOutputTokens(settings, llmConfig),
+    max_source_chars: getEffectiveMaxSourceChars(settings, llmConfig),
+    oversized_behavior: settings.oversized_behavior,
+    hard_max_request_timeout_ms: llmConfig.hardMaxRequestTimeoutMs,
+    hard_max_source_chars: llmConfig.hardMaxSourceChars
+  };
+}
+
+function buildSettingsResult(database, settings, keyConfigured, llmConfig) {
+  return {
+    ok: true,
+    key_configured: keyConfigured,
+    settings,
+    effective_config: buildEffectiveConfig(settings, keyConfigured, llmConfig),
+    recent_failure: mapRecentFailureRow(readLatestFailedSimplification(database))
+  };
+}
+
 export function createMaterialSimplifyService({ database, repoRoot, llmConfig, client }) {
   function loadContext(slug) {
     const material = readMaterialRow(database, slug);
@@ -699,7 +830,8 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
       };
     }
 
-    const settings = mapSettingsRow(readSettingsRow(database));
+    const settings = mapSettingsRow(readSettingsRow(database, llmConfig), llmConfig);
+    const sourceSizeAssessment = assessSourceSize(markdown.length, settings, llmConfig);
     return {
       ok: true,
       context: {
@@ -708,7 +840,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         settings,
         llmConfig,
         keyConfigured: !!llmConfig.apiKey,
+        effectiveRequestTimeoutMs: getEffectiveRequestTimeoutMs(settings, llmConfig),
         effectiveMaxOutputTokens: getEffectiveMaxOutputTokens(settings, llmConfig),
+        effectiveMaxSourceChars: getEffectiveMaxSourceChars(settings, llmConfig),
+        sourceSizeAssessment,
         sourceHash: createSourceHash(material, markdown),
         promptHash: createPromptHash(settings),
         configHash: createConfigHash({
@@ -767,8 +902,14 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
     }
 
     const now = new Date().toISOString();
-    if (context.markdown.length > llmConfig.maxSourceChars) {
-      const storedError = normalizeStoredError({ code: "content_too_large" });
+    if (context.sourceSizeAssessment.block) {
+      const storedError = normalizeStoredError({
+        code: "content_too_large",
+        message:
+          context.sourceSizeAssessment.reason === "hard_guardrail"
+            ? `Документ превышает жёсткий single-pass guardrail (${context.sourceSizeAssessment.hard_limit} символов).`
+            : `Документ превышает настроенный single-pass лимит (${context.sourceSizeAssessment.configured_limit} символов).`
+      });
       upsertSimplificationRow(database, {
         id: currentRow?.id ?? randomUUID(),
         material_id: context.material.id,
@@ -823,7 +964,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
       const abortController = new AbortController();
       const timeoutId = setTimeout(() => {
         abortController.abort();
-      }, llmConfig.requestTimeoutMs);
+      }, context.effectiveRequestTimeoutMs);
 
       try {
         logger.info({
@@ -835,8 +976,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
             material_id: context.material.id,
             provider: context.settings.provider,
             model: context.settings.model,
-            timeout_ms: llmConfig.requestTimeoutMs,
+            timeout_ms: context.effectiveRequestTimeoutMs,
             max_output_tokens: context.effectiveMaxOutputTokens,
+            max_source_chars: context.effectiveMaxSourceChars,
+            oversized_source: context.sourceSizeAssessment.oversized,
             source_chars: context.markdown.length,
             cache_intent: force ? "regenerate" : "cache_miss",
             abort_fired: false
@@ -885,8 +1028,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
             material_id: context.material.id,
             provider: context.settings.provider,
             model: context.settings.model,
-            timeout_ms: llmConfig.requestTimeoutMs,
+            timeout_ms: context.effectiveRequestTimeoutMs,
             max_output_tokens: context.effectiveMaxOutputTokens,
+            max_source_chars: context.effectiveMaxSourceChars,
+            oversized_source: context.sourceSizeAssessment.oversized,
             source_chars: context.markdown.length,
             cache_intent: force ? "regenerate" : "cache_miss",
             provider_http_status: providerDiagnostics.provider_http_status,
@@ -944,8 +1089,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
             material_id: context.material.id,
             provider: context.settings.provider,
             model: context.settings.model,
-            timeout_ms: llmConfig.requestTimeoutMs,
+            timeout_ms: context.effectiveRequestTimeoutMs,
             max_output_tokens: context.effectiveMaxOutputTokens,
+            max_source_chars: context.effectiveMaxSourceChars,
+            oversized_source: context.sourceSizeAssessment.oversized,
             source_chars: context.markdown.length,
             cache_intent: force ? "regenerate" : "cache_miss",
             error_code: storedError.error_code,
@@ -982,10 +1129,8 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
   }
 
   function getSettings() {
-    return {
-      ok: true,
-      ...buildSettingsPayload(mapSettingsRow(readSettingsRow(database)), !!llmConfig.apiKey)
-    };
+    const settings = mapSettingsRow(readSettingsRow(database, llmConfig), llmConfig);
+    return buildSettingsResult(database, settings, !!llmConfig.apiKey, llmConfig);
   }
 
   function updateSettings(input, actorUserId) {
@@ -995,14 +1140,57 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
     const userPromptTemplate = readString(input.user_prompt_template);
     const temperature = readNullableFiniteNumber(input.temperature);
     const maxOutputTokens = readNullablePositiveInt(input.max_output_tokens);
-    if (featureEnabled === null || !model || !systemPrompt || !userPromptTemplate) {
+    const requestTimeoutMs = readNullablePositiveInt(input.request_timeout_ms);
+    const maxSourceChars = readNullablePositiveInt(input.max_source_chars);
+    const oversizedBehavior = readOversizedBehavior(input.oversized_behavior);
+    if (featureEnabled === null || !model || !systemPrompt || !userPromptTemplate || !requestTimeoutMs || !maxSourceChars || !oversizedBehavior) {
       return {
         ok: false,
         error: {
           status: 400,
           body: {
             code: "invalid_input",
-            message: "feature_enabled, model, system_prompt, and user_prompt_template are required."
+            message:
+              "feature_enabled, model, system_prompt, user_prompt_template, request_timeout_ms, max_source_chars, and oversized_behavior are required."
+          }
+        }
+      };
+    }
+
+    if (!userPromptTemplate.includes("{{source_markdown}}")) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            code: "invalid_input",
+            message: "user_prompt_template must include {{source_markdown}}."
+          }
+        }
+      };
+    }
+
+    if (requestTimeoutMs < MIN_REQUEST_TIMEOUT_MS || requestTimeoutMs > llmConfig.hardMaxRequestTimeoutMs) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            code: "invalid_input",
+            message: `request_timeout_ms must stay between ${MIN_REQUEST_TIMEOUT_MS} and ${llmConfig.hardMaxRequestTimeoutMs}.`
+          }
+        }
+      };
+    }
+
+    if (maxSourceChars < MIN_MAX_SOURCE_CHARS || maxSourceChars > llmConfig.hardMaxSourceChars) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          body: {
+            code: "invalid_input",
+            message: `max_source_chars must stay between ${MIN_MAX_SOURCE_CHARS} and ${llmConfig.hardMaxSourceChars}.`
           }
         }
       };
@@ -1020,6 +1208,9 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
              prompt_version = ?,
              temperature = ?,
              max_output_tokens = ?,
+             request_timeout_ms = ?,
+             max_source_chars = ?,
+             oversized_behavior = ?,
              updated_at = ?,
              updated_by_user_id = ?
          WHERE id = ?`
@@ -1032,19 +1223,19 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         promptVersion,
         temperature,
         maxOutputTokens,
+        requestTimeoutMs,
+        maxSourceChars,
+        oversizedBehavior,
         now,
         actorUserId ?? null,
         SETTINGS_ROW_ID
       );
 
-    return {
-      ok: true,
-      ...buildSettingsPayload(mapSettingsRow(readSettingsRow(database)), !!llmConfig.apiKey)
-    };
+    return buildSettingsResult(database, mapSettingsRow(readSettingsRow(database, llmConfig), llmConfig), !!llmConfig.apiKey, llmConfig);
   }
 
   async function testConnection() {
-    const settings = mapSettingsRow(readSettingsRow(database));
+    const settings = mapSettingsRow(readSettingsRow(database, llmConfig), llmConfig);
     const testedAt = new Date().toISOString();
     if (!llmConfig.apiKey) {
       return {
@@ -1065,8 +1256,8 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         systemPrompt: settings.system_prompt,
         userPrompt: "Ответь ровно одной строкой: OK",
         temperature: settings.temperature,
-        maxOutputTokens: settings.max_output_tokens,
-        signal: AbortSignal.timeout(llmConfig.requestTimeoutMs)
+        maxOutputTokens: getEffectiveMaxOutputTokens(settings, llmConfig),
+        signal: AbortSignal.timeout(getEffectiveRequestTimeoutMs(settings, llmConfig))
       });
 
       return {

@@ -233,6 +233,9 @@ export type CabinetMaterialSimplifyResponse = z.infer<typeof cabinetMaterialSimp
 export const cabinetLlmProviderSchema = z.literal("deepseek");
 export type CabinetLlmProvider = z.infer<typeof cabinetLlmProviderSchema>;
 
+export const cabinetLlmSimplifyOversizedBehaviorSchema = z.enum(["block", "allow_with_warning"]);
+export type CabinetLlmSimplifyOversizedBehavior = z.infer<typeof cabinetLlmSimplifyOversizedBehaviorSchema>;
+
 export const cabinetLlmSimplifySettingsSchema = z.object({
   feature_enabled: z.boolean(),
   provider: cabinetLlmProviderSchema,
@@ -242,15 +245,40 @@ export const cabinetLlmSimplifySettingsSchema = z.object({
   prompt_version: z.string().min(1),
   temperature: z.number().finite().nullable(),
   max_output_tokens: z.number().int().positive().nullable(),
+  request_timeout_ms: z.number().int().positive(),
+  max_source_chars: z.number().int().positive(),
+  oversized_behavior: cabinetLlmSimplifyOversizedBehaviorSchema,
   updated_at: z.string().min(1),
   updated_by_username: z.string().min(1).nullable()
 });
 export type CabinetLlmSimplifySettings = z.infer<typeof cabinetLlmSimplifySettingsSchema>;
 
+export const cabinetLlmSimplifyEffectiveConfigSchema = z.object({
+  provider: cabinetLlmProviderSchema,
+  model: z.string().min(1),
+  key_configured: z.boolean(),
+  request_timeout_ms: z.number().int().positive(),
+  max_output_tokens: z.number().int().positive().nullable(),
+  max_source_chars: z.number().int().positive(),
+  oversized_behavior: cabinetLlmSimplifyOversizedBehaviorSchema,
+  hard_max_request_timeout_ms: z.number().int().positive(),
+  hard_max_source_chars: z.number().int().positive()
+});
+export type CabinetLlmSimplifyEffectiveConfig = z.infer<typeof cabinetLlmSimplifyEffectiveConfigSchema>;
+
+export const cabinetLlmSimplifyRecentFailureSchema = z.object({
+  material_slug: z.string().min(1),
+  error_code: z.string().min(1),
+  updated_at: z.string().min(1)
+});
+export type CabinetLlmSimplifyRecentFailure = z.infer<typeof cabinetLlmSimplifyRecentFailureSchema>;
+
 export const cabinetLlmSimplifySettingsResponseSchema = z.object({
   ok: z.literal(true),
   key_configured: z.boolean(),
-  settings: cabinetLlmSimplifySettingsSchema
+  settings: cabinetLlmSimplifySettingsSchema,
+  effective_config: cabinetLlmSimplifyEffectiveConfigSchema,
+  recent_failure: cabinetLlmSimplifyRecentFailureSchema.nullable()
 });
 export type CabinetLlmSimplifySettingsResponse = z.infer<typeof cabinetLlmSimplifySettingsResponseSchema>;
 
@@ -260,7 +288,10 @@ export const updateCabinetLlmSimplifySettingsRequestSchema = z.object({
   system_prompt: z.string().trim().min(1).max(20_000),
   user_prompt_template: z.string().trim().min(1).max(40_000),
   temperature: z.number().finite().nullable(),
-  max_output_tokens: z.number().int().positive().nullable()
+  max_output_tokens: z.number().int().positive().nullable(),
+  request_timeout_ms: z.number().int().positive(),
+  max_source_chars: z.number().int().positive(),
+  oversized_behavior: cabinetLlmSimplifyOversizedBehaviorSchema
 });
 export type UpdateCabinetLlmSimplifySettingsRequest = z.infer<typeof updateCabinetLlmSimplifySettingsRequestSchema>;
 

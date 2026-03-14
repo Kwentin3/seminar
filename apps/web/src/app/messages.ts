@@ -258,13 +258,46 @@ type CabinetMessages = {
     updatedBy: string;
     featureToggle: string;
     featureHint: string;
+    connectionHeading: string;
+    settingsHeading: string;
+    effectiveHeading: string;
+    warningsHeading: string;
     modelLabel: string;
     temperatureLabel: string;
     maxTokensLabel: string;
+    maxTokensHint: string;
+    timeoutLabel: string;
+    timeoutHint: string;
+    inputLimitLabel: string;
+    inputLimitHint: string;
+    oversizedBehaviorLabel: string;
+    oversizedBehaviorHint: string;
+    oversizedBehaviorBlock: string;
+    oversizedBehaviorAllow: string;
     optionalPlaceholder: string;
     promptLabel: string;
     documentPromptLabel: string;
     documentPromptHint: string;
+    effectiveProvider: string;
+    effectiveModel: string;
+    effectiveKey: string;
+    effectiveTimeout: string;
+    effectiveMaxTokens: string;
+    effectiveInputLimit: string;
+    effectiveOversizedBehavior: string;
+    effectiveHardTimeout: string;
+    effectiveHardInputLimit: string;
+    noExplicitOutputCap: string;
+    recentFailure: string;
+    noRecentFailure: string;
+    warningsEmpty: string;
+    warningMissingKey: string;
+    warningLowMaxTokens: string;
+    warningLongTimeout: string;
+    warningLargeInputLimit: string;
+    warningAllowOversized: string;
+    warningWeakSystemPrompt: string;
+    warningMissingSourceToken: string;
     saveIdle: string;
     saveLoading: string;
     saveSuccess: string;
@@ -588,13 +621,46 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         updatedBy: "Кем: {value}",
         featureToggle: "Включить reader-пересказ",
         featureHint: "Если опция выключена, кнопка пересказа останется недоступной даже при настроенном ключе.",
+        connectionHeading: "Подключение",
+        settingsHeading: "Основные настройки пересказа",
+        effectiveHeading: "Effective config и guardrails",
+        warningsHeading: "Warnings и подсказки",
         modelLabel: "Модель",
         temperatureLabel: "Temperature",
         maxTokensLabel: "Max output tokens",
+        maxTokensHint: "Оставьте пустым, чтобы не задавать explicit output cap.",
+        timeoutLabel: "Timeout budget (ms)",
+        timeoutHint: "Сколько simplify ждёт ответ провайдера перед fail state.",
+        inputLimitLabel: "Single-pass input limit (chars)",
+        inputLimitHint: "Порог длины markdown для single-pass simplify перед oversized behavior.",
+        oversizedBehaviorLabel: "Поведение для oversized документа",
+        oversizedBehaviorHint: "Без chunking длинные документы могут работать нестабильно.",
+        oversizedBehaviorBlock: "Блокировать с сообщением",
+        oversizedBehaviorAllow: "Пробовать с предупреждением",
         optionalPlaceholder: "Необязательно",
         promptLabel: "Системный промт пересказа",
         documentPromptLabel: "Шаблон prompt с документом",
         documentPromptHint: "Доступные токены: {{material_title}}, {{material_slug}}, {{material_source_path}}, {{source_markdown}}.",
+        effectiveProvider: "Provider",
+        effectiveModel: "Active model",
+        effectiveKey: "API key",
+        effectiveTimeout: "Effective timeout",
+        effectiveMaxTokens: "Effective max output tokens",
+        effectiveInputLimit: "Effective single-pass limit",
+        effectiveOversizedBehavior: "Oversized behavior",
+        effectiveHardTimeout: "Hard timeout guardrail",
+        effectiveHardInputLimit: "Hard input-size guardrail",
+        noExplicitOutputCap: "Нет explicit output cap",
+        recentFailure: "Последний failure",
+        noRecentFailure: "Последний failure пока не зафиксирован.",
+        warningsEmpty: "Текущая конфигурация выглядит разумно для MVP single-pass simplify.",
+        warningMissingKey: "API key не настроен: generate path не сможет работать на живом провайдере.",
+        warningLowMaxTokens: "Низкий max output tokens может снова привести к обрезанному пересказу.",
+        warningLongTimeout: "Слишком высокий timeout увеличивает пользовательское ожидание и может сделать UX тяжёлым.",
+        warningLargeInputLimit: "Высокий single-pass input limit без chunking повышает риск нестабильности на длинных документах.",
+        warningAllowOversized: "Режим allow-with-warning допускает длинные документы, но не гарантирует стабильный результат без chunking.",
+        warningWeakSystemPrompt: "Слишком короткий системный prompt может сделать пересказ слишком слабым и расплывчатым.",
+        warningMissingSourceToken: "Шаблон документа должен содержать {{source_markdown}}, иначе simplify потеряет исходный текст.",
         saveIdle: "Сохранить настройки",
         saveLoading: "Сохраняем...",
         saveSuccess: "Настройки сохранены.",
@@ -910,13 +976,46 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         updatedBy: "By: {value}",
         featureToggle: "Enable simplified reader mode",
         featureHint: "When disabled, the simplify action stays unavailable even if a key is configured.",
+        connectionHeading: "Connection",
+        settingsHeading: "Core simplify settings",
+        effectiveHeading: "Effective config and guardrails",
+        warningsHeading: "Warnings and hints",
         modelLabel: "Model",
         temperatureLabel: "Temperature",
         maxTokensLabel: "Max output tokens",
+        maxTokensHint: "Leave empty to avoid sending an explicit output cap.",
+        timeoutLabel: "Timeout budget (ms)",
+        timeoutHint: "How long simplify waits for the provider before failing.",
+        inputLimitLabel: "Single-pass input limit (chars)",
+        inputLimitHint: "Markdown length threshold before oversized behavior applies.",
+        oversizedBehaviorLabel: "Oversized document behavior",
+        oversizedBehaviorHint: "Without chunking, long documents can still be unstable.",
+        oversizedBehaviorBlock: "Block with message",
+        oversizedBehaviorAllow: "Allow with warning",
         optionalPlaceholder: "Optional",
         promptLabel: "Simplify system prompt",
         documentPromptLabel: "Document prompt template",
         documentPromptHint: "Available tokens: {{material_title}}, {{material_slug}}, {{material_source_path}}, {{source_markdown}}.",
+        effectiveProvider: "Provider",
+        effectiveModel: "Active model",
+        effectiveKey: "API key",
+        effectiveTimeout: "Effective timeout",
+        effectiveMaxTokens: "Effective max output tokens",
+        effectiveInputLimit: "Effective single-pass limit",
+        effectiveOversizedBehavior: "Oversized behavior",
+        effectiveHardTimeout: "Hard timeout guardrail",
+        effectiveHardInputLimit: "Hard input-size guardrail",
+        noExplicitOutputCap: "No explicit output cap",
+        recentFailure: "Latest failure",
+        noRecentFailure: "No simplify failure has been recorded yet.",
+        warningsEmpty: "The current configuration looks reasonable for MVP single-pass simplify.",
+        warningMissingKey: "API key is missing, so live generation cannot work yet.",
+        warningLowMaxTokens: "A low max output tokens value can lead to truncated retellings again.",
+        warningLongTimeout: "A very high timeout increases user wait time and can make the UX feel heavy.",
+        warningLargeInputLimit: "A high single-pass input limit without chunking increases instability risk on long documents.",
+        warningAllowOversized: "Allow-with-warning lets long documents through, but does not guarantee stable output without chunking.",
+        warningWeakSystemPrompt: "A very short system prompt can make the retelling too weak and vague.",
+        warningMissingSourceToken: "The document template must include {{source_markdown}}, otherwise simplify loses the source text.",
         saveIdle: "Save settings",
         saveLoading: "Saving...",
         saveSuccess: "Settings saved.",

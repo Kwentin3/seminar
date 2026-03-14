@@ -27,6 +27,9 @@ function readNullablePositiveInt(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+const HARD_MAX_REQUEST_TIMEOUT_MS = 120_000;
+const HARD_MAX_SOURCE_CHARS = 25_000;
+
 function normalizeBaseUrl(value) {
   const normalized = readString(value) ?? "https://api.deepseek.com";
   return normalized.replace(/\/+$/, "");
@@ -37,8 +40,10 @@ export function readLlmSimplifyConfig(env) {
     provider: "deepseek",
     apiKey: readString(env.DEEPSEEK_API_KEY),
     baseUrl: normalizeBaseUrl(env.DEEPSEEK_BASE_URL),
-    requestTimeoutMs: readPositiveInt(env.LLM_SIMPLIFY_TIMEOUT_MS, 75_000),
-    maxSourceChars: readPositiveInt(env.LLM_SIMPLIFY_MAX_SOURCE_CHARS, 20_000),
-    defaultMaxOutputTokens: readNullablePositiveInt(env.LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS)
+    defaultRequestTimeoutMs: readPositiveInt(env.LLM_SIMPLIFY_TIMEOUT_MS, 75_000),
+    defaultMaxSourceChars: readPositiveInt(env.LLM_SIMPLIFY_MAX_SOURCE_CHARS, 20_000),
+    defaultMaxOutputTokens: readNullablePositiveInt(env.LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS),
+    hardMaxRequestTimeoutMs: HARD_MAX_REQUEST_TIMEOUT_MS,
+    hardMaxSourceChars: HARD_MAX_SOURCE_CHARS
   };
 }
