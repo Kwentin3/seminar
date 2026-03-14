@@ -380,15 +380,17 @@ jobs:
           docker network inspect edge >/dev/null
           docker pull "${SEMINAR_IMAGE}"
 
-          export APP_ROUTER_NAME="seminar-smoke"
-          export APP_HOST_RULE='Host(`seminar-ai.ru`) || Host(`www.seminar-ai.ru`)'
+          # Sticky note: docker smoke must use its own Host rule. Reusing the
+          # live production hosts makes 127.0.0.1:18080 ambiguous because the
+          # edge can route part of the smoke traffic into the public app.
+          export APP_ROUTER_NAME="seminar-stage"
+          export APP_HOST_RULE='Host(`stage-smoke.local`)'
           export APP_SERVICE_PORT="8787"
           export TRAEFIK_CERTRESOLVER="le"
           export TRAEFIK_ENTRYPOINTS_WEB="web"
           export TRAEFIK_ENTRYPOINTS_WEBSECURE="websecure"
-          export APP_ENABLE_WWW_REDIRECT="1"
-          export APP_WWW_REDIRECT_TO="seminar-ai.ru"
-          export APP_MIDDLEWARES="seminar-smoke-www-redirect"
+          export APP_ENABLE_WWW_REDIRECT="0"
+          export APP_MIDDLEWARES=""
 
           docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml config > /tmp/seminar-smoke.effective.yml
           grep -n "traefik.http.routers.${APP_ROUTER_NAME}-web.rule" /tmp/seminar-smoke.effective.yml
@@ -442,11 +444,11 @@ jobs:
             exit 1
           fi
 
-          ROOT_CODE="$(curl -sS -o /tmp/seminar-docker-root.out -w '%{http_code}' -H 'Host: seminar-ai.ru' http://127.0.0.1:18080/)"
-          HEALTH_CODE="$(curl -sS -o /tmp/seminar-docker-health.out -w '%{http_code}' -H 'Host: seminar-ai.ru' http://127.0.0.1:18080/api/healthz)"
+          ROOT_CODE="$(curl -sS -o /tmp/seminar-docker-root.out -w '%{http_code}' -H 'Host: stage-smoke.local' http://127.0.0.1:18080/)"
+          HEALTH_CODE="$(curl -sS -o /tmp/seminar-docker-health.out -w '%{http_code}' -H 'Host: stage-smoke.local' http://127.0.0.1:18080/api/healthz)"
           ADMIN_SECRET="$(grep -E '^ADMIN_SECRET=' /etc/seminar/seminar.docker.env | head -n1 | cut -d= -f2-)"
           SINCE="$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
-          OBS_CODE="$(curl -sS -o /tmp/seminar-docker-obs.out -w '%{http_code}' -H 'Host: seminar-ai.ru' -H "X-Admin-Secret: ${ADMIN_SECRET}" "http://127.0.0.1:18080/admin/obs/logs?since=${SINCE}&limit=20")"
+          OBS_CODE="$(curl -sS -o /tmp/seminar-docker-obs.out -w '%{http_code}' -H 'Host: stage-smoke.local' -H "X-Admin-Secret: ${ADMIN_SECRET}" "http://127.0.0.1:18080/admin/obs/logs?since=${SINCE}&limit=20")"
 
           if [[ "${ROOT_CODE}" != "200" || "${HEALTH_CODE}" != "200" || "${OBS_CODE}" != "200" ]]; then
             echo "smoke failed root=${ROOT_CODE} health=${HEALTH_CODE} obs=${OBS_CODE}"
@@ -478,5 +480,5 @@ jobs:
             echo "- pinned image: \`${SEMINAR_IMAGE_REF}\`"
             echo "- expected digest: \`${EXPECTED_DIGEST}\`"
             echo "- build_id: \`${BUILD_ID}\`"
-            echo "- smoke host: \`127.0.0.1:18080\` with \`Host: seminar-ai.ru\`"
+            echo "- smoke host: \`127.0.0.1:18080\` with \`Host: stage-smoke.local\`"
           } >> "$GITHUB_STEP_SUMMARY"

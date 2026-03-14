@@ -33,6 +33,7 @@ CI runs:
 10. Deploy Docker smoke on VPS by pinned digest (without public edge switch):
    - pull `ghcr.io/kwentin3/seminar@sha256:<digest>`
    - run smoke through Traefik smoke bind `127.0.0.1:18080`
+   - use dedicated smoke host header `Host: stage-smoke.local`
    - mandatory `/admin/obs/logs` check with `OBS_LOG_SOURCE=docker`
 
 Production policy:

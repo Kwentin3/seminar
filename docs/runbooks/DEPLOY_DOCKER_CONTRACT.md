@@ -38,10 +38,11 @@ docker compose -f <stack>.yml ps
 ```
 4. Run smoke gate:
 ```bash
-curl -fsS http://127.0.0.1:<edge_http_port>/ -H "Host: <domain>"
-curl -fsS http://127.0.0.1:<edge_http_port>/api/healthz -H "Host: <domain>"
-curl -fsS -H "X-Admin-Secret: <redacted>" "http://127.0.0.1:<edge_http_port>/admin/obs/logs?since=<ISO8601>&limit=20" -H "Host: <domain>"
+curl -fsS http://127.0.0.1:<edge_http_port>/ -H "Host: <smoke-host>"
+curl -fsS http://127.0.0.1:<edge_http_port>/api/healthz -H "Host: <smoke-host>"
+curl -fsS -H "X-Admin-Secret: <redacted>" "http://127.0.0.1:<edge_http_port>/admin/obs/logs?since=<ISO8601>&limit=20" -H "Host: <smoke-host>"
 ```
+For smoke/stage-safe contour, `<smoke-host>` MUST be a dedicated host header and MUST NOT reuse the public production domain.
 5. Mark deploy success only after smoke passes.
 6. Run artifact parity check (MUST pass before cutover):
 ```bash
