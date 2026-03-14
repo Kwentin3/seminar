@@ -10,17 +10,23 @@ const EXTERNAL_SERVER = process.env.CABINET_BROWSER_SMOKE_USE_EXISTING_SERVER ==
 const BASE_URL = process.env.LEADS_BASE_URL ?? "http://127.0.0.1:8787";
 const CABINET_LOGIN = process.env.CABINET_BOOTSTRAP_USERNAME ?? "local-admin";
 const CABINET_PASSWORD = process.env.CABINET_BOOTSTRAP_PASSWORD ?? "local-admin-pass";
+const PLAYWRIGHT_HOST_RESOLVER_RULES = process.env.PLAYWRIGHT_HOST_RESOLVER_RULES?.trim() || null;
+const SKIP_SIMPLIFY = process.env.CABINET_BROWSER_SMOKE_SKIP_SIMPLIFY === "1";
+const EXTERNAL_MINIMAL = EXTERNAL_SERVER && process.env.CABINET_BROWSER_SMOKE_EXTERNAL_MINIMAL !== "0";
 
 async function run() {
   const managedProvider = EXTERNAL_SERVER ? null : await startStubDeepSeek();
   const managedServer = EXTERNAL_SERVER ? null : await startManagedServer(managedProvider);
   const browser = await chromium.launch({
-    headless: process.env.PLAYWRIGHT_HEADLESS !== "0"
+    headless: process.env.PLAYWRIGHT_HEADLESS !== "0",
+    args: PLAYWRIGHT_HOST_RESOLVER_RULES ? [`--host-resolver-rules=${PLAYWRIGHT_HOST_RESOLVER_RULES}`] : []
   });
 
   try {
     const baseUrl = managedServer?.baseUrl ?? BASE_URL;
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+      ignoreHTTPSErrors: process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === "1"
+    });
     const page = await context.newPage();
 
     await page.goto(`${baseUrl}/cabinet`, {
@@ -37,34 +43,76 @@ async function run() {
     ]);
 
     await page.getByRole("heading", { name: /Библиотека материалов|Materials library/ }).waitFor();
-    await page.getByText(/С чего начать|Start here/).waitFor();
-    await page.getByLabel(/Статус|Status/).selectOption("final");
-    await page.locator("article").first().getByText(/Опорный|Anchor/).first().waitFor();
-    await page.locator("article").first().getByText(/Проверено куратором|Curator reviewed/).waitFor();
-    await page.getByRole("link", { name: /Читать в кабинете|Read in cabinet/ }).first().waitFor();
-    await page.getByRole("link", { name: /Пользователи|Users/ }).click();
-    await page.waitForURL(/\/cabinet\/admin\/users$/);
-    await page.getByRole("heading", { name: /Пользователи кабинета|Cabinet users/ }).waitFor();
-    await page.getByRole("button", { name: /Создать lecturer|Create lecturer/ }).waitFor();
+    if (!EXTERNAL_MINIMAL) {
+      await page.getByText(/С чего начать|Start here/).waitFor();
+      await page.getByLabel(/Статус|Status/).selectOption("final");
+      await page.locator("article").first().getByText(/Опорный|Anchor/).first().waitFor();
+      await page.locator("article").first().getByText(/Проверено куратором|Curator reviewed/).waitFor();
+    }
+    const materialLink = page.locator('a[href*="/cabinet/materials/"]').first();
+    let externalReaderUrl = null;
+    if (EXTERNAL_MINIMAL) {
+      externalReaderUrl = await page.evaluate(async () => {
+        const adminUsersResponse = await fetch("/api/cabinet/admin/users", {
+          credentials: "include"
+        });
+        if (adminUsersResponse.status !== 200) {
+          throw new Error(`admin users api failed with ${adminUsersResponse.status}`);
+        }
 
-    await Promise.all([
-      page.waitForURL(/\/cabinet(?:\?|$)/),
-      page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
-    ]);
+        const materialsResponse = await fetch("/api/cabinet/materials", {
+          credentials: "include"
+        });
+        if (!materialsResponse.ok) {
+          throw new Error(`materials api failed with ${materialsResponse.status}`);
+        }
 
-    await page.getByRole("heading", { name: /Библиотека материалов|Materials library/ }).waitFor();
+        const payload = await materialsResponse.json();
+        const item = Array.isArray(payload.items)
+          ? payload.items.find((entry) => entry.reading_mode === "in_app") ?? payload.items[0]
+          : null;
+        if (!item?.slug) {
+          throw new Error("no material slug available for browser smoke");
+        }
 
-    await Promise.all([
-      page.waitForURL(/\/cabinet\/materials\/[^/]+$/),
-      page.getByRole("link", { name: /Читать в кабинете|Read in cabinet/ }).first().click()
-    ]);
+        return `/cabinet/materials/${item.slug}`;
+      });
+    } else {
+      await materialLink.waitFor();
+      await page.getByRole("link", { name: /Пользователи|Users/ }).click();
+      await page.waitForURL(/\/cabinet\/admin\/users(?:\?|$)/);
+      await page.getByRole("heading", { name: /Пользователи кабинета|Cabinet users/ }).waitFor();
+      await page.getByRole("button", { name: /Создать lecturer|Create lecturer/ }).waitFor();
+      await Promise.all([
+        page.waitForURL(/\/cabinet(?:\?|$)/),
+        page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
+      ]);
+      await page.getByRole("heading", { name: /Библиотека материалов|Materials library/ }).waitFor();
+    }
+
+    if (EXTERNAL_MINIMAL) {
+      await page.goto(`${baseUrl}${externalReaderUrl}`, {
+        waitUntil: "networkidle"
+      });
+      await page.waitForURL(/\/cabinet\/materials\/[^/]+$/);
+    } else {
+      await Promise.all([
+        page.waitForURL(/\/cabinet\/materials\/[^/]+$/),
+        materialLink.click()
+      ]);
+    }
 
     await page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).waitFor();
+    if (!EXTERNAL_MINIMAL) {
       await page.getByText(/Коротко о материале|Quick facts/).waitFor();
       await page.getByText(/Контекст материала|Material context/).waitFor();
       await page.getByText(/Проверено куратором|Curator reviewed/).first().waitFor();
       await page.locator("article").first().waitFor();
+    } else {
+      await page.locator("article").first().waitFor();
+    }
 
+    if (!SKIP_SIMPLIFY) {
       await page.getByRole("button", { name: /Пересказать простым языком|Explain simply/ }).click();
       await page.getByRole("tab", { name: /Простым языком|Simplified/ }).waitFor();
       await page.getByText(/Упрощённый пересказ #1/).waitFor();
@@ -72,10 +120,11 @@ async function run() {
       await page.getByRole("button", { name: /Перегенерировать|Regenerate/ }).click();
       await page.getByText(/Упрощённый пересказ #2/).waitFor();
       await page.getByRole("tab", { name: /Оригинал|Original/ }).click();
+    }
 
-      await Promise.all([
-        page.waitForURL(/\/cabinet(?:\?|$)/),
-        page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
+    await Promise.all([
+      page.waitForURL(/\/cabinet(?:\?|$)/),
+      page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
     ]);
 
     await Promise.all([
@@ -88,7 +137,7 @@ async function run() {
     });
     await page.waitForURL(/\/cabinet\/login(?:\?|$)/);
 
-    console.log(`Cabinet browser smoke passed. baseUrl=${baseUrl}`);
+    console.log(`Cabinet browser smoke passed. baseUrl=${baseUrl} simplify=${SKIP_SIMPLIFY ? "skip" : "full"}`);
   } finally {
     await browser.close();
     if (managedServer) {

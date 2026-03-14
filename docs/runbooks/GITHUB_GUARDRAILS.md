@@ -98,6 +98,19 @@ Common actions:
    - `pnpm run test:smoke:leads`
    - `pnpm run test:smoke:cabinet`
    - `pnpm run test:smoke:cabinet:browser`
+4. For stage-safe cabinet verification on the docker smoke contour:
+   - API smoke:
+     - `LEADS_BASE_URL=http://127.0.0.1:18080`
+     - `SMOKE_HOST_HEADER=stage-smoke.local`
+     - `CABINET_SMOKE_SKIP_LEGACY_ADMIN=1`
+   - Browser smoke:
+     - tunnel `127.0.0.1:18443 -> VPS 127.0.0.1:18443`
+     - `CABINET_BROWSER_SMOKE_USE_EXISTING_SERVER=1`
+     - `LEADS_BASE_URL=https://stage-smoke.local:18443`
+     - `PLAYWRIGHT_HOST_RESOLVER_RULES="MAP stage-smoke.local 127.0.0.1"`
+     - `PLAYWRIGHT_IGNORE_HTTPS_ERRORS=1`
+     - `CABINET_BROWSER_SMOKE_EXTERNAL_MINIMAL=1`
+     - `CABINET_BROWSER_SMOKE_SKIP_SIMPLIFY=1`
 
 ## Secrets Rule
 
