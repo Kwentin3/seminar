@@ -16,6 +16,7 @@ type SettingsFormState = {
   feature_enabled: boolean;
   model: string;
   system_prompt: string;
+  user_prompt_template: string;
   temperature: string;
   max_output_tokens: string;
 };
@@ -166,6 +167,7 @@ export function CabinetLlmSettingsPage() {
         feature_enabled: form.feature_enabled,
         model: form.model.trim(),
         system_prompt: form.system_prompt.trim(),
+        user_prompt_template: form.user_prompt_template.trim(),
         temperature: form.temperature.trim().length > 0 ? Number(form.temperature) : null,
         max_output_tokens: form.max_output_tokens.trim().length > 0 ? Number(form.max_output_tokens) : null
       };
@@ -392,6 +394,17 @@ export function CabinetLlmSettingsPage() {
             />
           </label>
 
+          <label className="space-y-1">
+            <span className="text-sm font-medium">{messages.cabinet.llmSettings.documentPromptLabel}</span>
+            <textarea
+              value={form.user_prompt_template}
+              onChange={(event) => onChangeField("user_prompt_template", event.target.value)}
+              rows={14}
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-900"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">{messages.cabinet.llmSettings.documentPromptHint}</p>
+          </label>
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
@@ -423,6 +436,7 @@ function toFormState(payload: CabinetLlmSimplifySettingsResponse): SettingsFormS
     feature_enabled: payload.settings.feature_enabled,
     model: payload.settings.model,
     system_prompt: payload.settings.system_prompt,
+    user_prompt_template: payload.settings.user_prompt_template,
     temperature: payload.settings.temperature === null ? "" : String(payload.settings.temperature),
     max_output_tokens: payload.settings.max_output_tokens === null ? "" : String(payload.settings.max_output_tokens)
   };

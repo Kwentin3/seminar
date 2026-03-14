@@ -2,6 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { logger } from "../obs/logger.mjs";
+import {
+  getDefaultSimplifyPromptConfig,
+  renderSimplifyUserPrompt
+} from "./material-simplify-prompts.mjs";
 
 const FEATURE_KIND = "simple_retell";
 const SETTINGS_ROW_ID = "default";
@@ -103,8 +107,13 @@ function createSourceHash(material, markdown) {
   );
 }
 
-function createPromptHash(systemPrompt) {
-  return sha256Hex(canonicalStringify({ system_prompt: systemPrompt }));
+function createPromptHash(settings) {
+  return sha256Hex(
+    canonicalStringify({
+      system_prompt: settings.system_prompt,
+      user_prompt_template: settings.user_prompt_template
+    })
+  );
 }
 
 function createConfigHash(settings) {
@@ -422,6 +431,7 @@ function readLatestRowForMaterial(database, materialId) {
 }
 
 function readSettingsRow(database) {
+  const defaultPromptConfig = getDefaultSimplifyPromptConfig();
   const row = database
     .prepare(
       `SELECT
@@ -429,6 +439,7 @@ function readSettingsRow(database) {
         llm_simplify_settings.feature_enabled,
         llm_simplify_settings.model,
         llm_simplify_settings.system_prompt,
+        llm_simplify_settings.user_prompt_template,
         llm_simplify_settings.prompt_version,
         llm_simplify_settings.temperature,
         llm_simplify_settings.max_output_tokens,
@@ -454,16 +465,18 @@ function readSettingsRow(database) {
         feature_enabled,
         model,
         system_prompt,
+        user_prompt_template,
         prompt_version,
         temperature,
         max_output_tokens,
         updated_at,
         updated_by_user_id
-      ) VALUES (?, 'deepseek', 1, 'deepseek-chat', ?, 'v1', NULL, NULL, ?, NULL)`
+      ) VALUES (?, 'deepseek', 1, 'deepseek-chat', ?, ?, 'v1', NULL, NULL, ?, NULL)`
     )
     .run(
       SETTINGS_ROW_ID,
-      "Ты помогаешь преподавателю быстро понять документ. Перескажи исходный материал простым и точным русским языком. Не придумывай новые факты.",
+      defaultPromptConfig.system_prompt,
+      defaultPromptConfig.user_prompt_template,
       now
     );
 
@@ -474,6 +487,7 @@ function readSettingsRow(database) {
         feature_enabled,
         model,
         system_prompt,
+        user_prompt_template,
         prompt_version,
         temperature,
         max_output_tokens,
@@ -487,13 +501,13 @@ function readSettingsRow(database) {
 }
 
 function mapSettingsRow(row) {
+  const defaultPromptConfig = getDefaultSimplifyPromptConfig();
   return {
     provider: readString(row.provider) ?? "deepseek",
     feature_enabled: row.feature_enabled === 1,
     model: readString(row.model) ?? "deepseek-chat",
-    system_prompt:
-      readString(row.system_prompt)
-      ?? "Ты помогаешь преподавателю быстро понять документ. Перескажи исходный материал простым и точным русским языком.",
+    system_prompt: readString(row.system_prompt) ?? defaultPromptConfig.system_prompt,
+    user_prompt_template: readString(row.user_prompt_template) ?? defaultPromptConfig.user_prompt_template,
     prompt_version: readString(row.prompt_version) ?? "v1",
     temperature: typeof row.temperature === "number" && Number.isFinite(row.temperature) ? row.temperature : null,
     max_output_tokens:
@@ -544,18 +558,8 @@ function createIdentity(context) {
   };
 }
 
-function createUserPrompt(material, markdown) {
-  return [
-    "Ниже исходный документ в markdown.",
-    "Сделай упрощённый пересказ на русском языке для лектора.",
-    "Сохраняй смысл, не придумывай новых фактов, не превращай текст в чат.",
-    "Если структура документа помогает понять материал, сохрани её в markdown.",
-    "",
-    `Название документа: ${material.title}`,
-    "",
-    "Исходный документ:",
-    markdown
-  ].join("\n");
+function createUserPrompt(settings, material, markdown) {
+  return renderSimplifyUserPrompt(settings.user_prompt_template, material, markdown);
 }
 
 function mapContextToBase(context) {
@@ -689,7 +693,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         keyConfigured: !!llmConfig.apiKey,
         effectiveMaxOutputTokens: getEffectiveMaxOutputTokens(settings, llmConfig),
         sourceHash: createSourceHash(material, markdown),
-        promptHash: createPromptHash(settings.system_prompt),
+        promptHash: createPromptHash(settings),
         configHash: createConfigHash({
           ...settings,
           max_output_tokens: getEffectiveMaxOutputTokens(settings, llmConfig)
@@ -825,7 +829,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         const completion = await client.createChatCompletion({
           model: context.settings.model,
           systemPrompt: context.settings.system_prompt,
-          userPrompt: createUserPrompt(context.material, context.markdown),
+          userPrompt: createUserPrompt(context.settings, context.material, context.markdown),
           temperature: context.settings.temperature,
           maxOutputTokens: context.effectiveMaxOutputTokens,
           signal: abortController.signal
@@ -963,16 +967,17 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
     const featureEnabled = typeof input.feature_enabled === "boolean" ? input.feature_enabled : null;
     const model = readString(input.model);
     const systemPrompt = readString(input.system_prompt);
+    const userPromptTemplate = readString(input.user_prompt_template);
     const temperature = readNullableFiniteNumber(input.temperature);
     const maxOutputTokens = readNullablePositiveInt(input.max_output_tokens);
-    if (featureEnabled === null || !model || !systemPrompt) {
+    if (featureEnabled === null || !model || !systemPrompt || !userPromptTemplate) {
       return {
         ok: false,
         error: {
           status: 400,
           body: {
             code: "invalid_input",
-            message: "feature_enabled, model, and system_prompt are required."
+            message: "feature_enabled, model, system_prompt, and user_prompt_template are required."
           }
         }
       };
@@ -986,6 +991,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
          SET feature_enabled = ?,
              model = ?,
              system_prompt = ?,
+             user_prompt_template = ?,
              prompt_version = ?,
              temperature = ?,
              max_output_tokens = ?,
@@ -997,6 +1003,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         featureEnabled ? 1 : 0,
         model,
         systemPrompt,
+        userPromptTemplate,
         promptVersion,
         temperature,
         maxOutputTokens,

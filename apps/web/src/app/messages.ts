@@ -260,6 +260,8 @@ type CabinetMessages = {
     maxTokensLabel: string;
     optionalPlaceholder: string;
     promptLabel: string;
+    documentPromptLabel: string;
+    documentPromptHint: string;
     saveIdle: string;
     saveLoading: string;
     saveSuccess: string;
@@ -544,6 +546,8 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         maxTokensLabel: "Max output tokens",
         optionalPlaceholder: "Необязательно",
         promptLabel: "Системный промт пересказа",
+        documentPromptLabel: "Шаблон prompt с документом",
+        documentPromptHint: "Доступные токены: {{material_title}}, {{material_slug}}, {{material_source_path}}, {{source_markdown}}.",
         saveIdle: "Сохранить настройки",
         saveLoading: "Сохраняем...",
         saveSuccess: "Настройки сохранены.",
@@ -820,6 +824,8 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         maxTokensLabel: "Max output tokens",
         optionalPlaceholder: "Optional",
         promptLabel: "Simplify system prompt",
+        documentPromptLabel: "Document prompt template",
+        documentPromptHint: "Available tokens: {{material_title}}, {{material_slug}}, {{material_source_path}}, {{source_markdown}}.",
         saveIdle: "Save settings",
         saveLoading: "Saving...",
         saveSuccess: "Settings saved.",

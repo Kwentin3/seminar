@@ -50,6 +50,9 @@ test("cabinet simplify generates once, caches by identity, and regenerate overwr
   assert.match(firstGeneratePayload.state.content, /Упрощённый пересказ #1/);
   assert.equal(provider.requestCount(), 1);
   assert.equal(provider.lastRequest().max_tokens, 900);
+  assert.match(provider.lastRequest().messages[1].content, /Название документа:/);
+  assert.match(provider.lastRequest().messages[1].content, /Slug документа:/);
+  assert.doesNotMatch(provider.lastRequest().messages[1].content, /\{\{source_markdown\}\}/);
 
   const cachedGenerateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
     method: "POST",
@@ -216,6 +219,7 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
   });
   assert.equal(settingsResponse.status, 200);
   const settingsPayload = await settingsResponse.json();
+  assert.match(settingsPayload.settings.user_prompt_template, /\{\{material_title\}\}/);
 
   const updateResponse = await fetch(`${server.baseUrl}/api/cabinet/admin/llm-simplify/settings`, {
     method: "PUT",
@@ -227,6 +231,14 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
       feature_enabled: true,
       model: `${settingsPayload.settings.model}-next`,
       system_prompt: `${settingsPayload.settings.system_prompt}\n\nДобавь один короткий итоговый абзац.`,
+      user_prompt_template: [
+        "CUSTOM TEMPLATE",
+        "Doc: {{material_title}}",
+        "Slug: {{material_slug}}",
+        "Source: {{material_source_path}}",
+        "",
+        "{{source_markdown}}"
+      ].join("\n"),
       temperature: settingsPayload.settings.temperature,
       max_output_tokens: settingsPayload.settings.max_output_tokens
     })
@@ -234,6 +246,7 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
   assert.equal(updateResponse.status, 200);
   const updatePayload = await updateResponse.json();
   assert.notEqual(updatePayload.settings.prompt_version, settingsPayload.settings.prompt_version);
+  assert.match(updatePayload.settings.user_prompt_template, /CUSTOM TEMPLATE/);
 
   const staleStateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
     headers: {
@@ -258,6 +271,9 @@ test("cabinet simplify settings are admin-only, connection test is terminal, and
   assert.equal(refreshedPayload.state.status, "ready");
   assert.equal(refreshedPayload.state.delivery_mode, "generated");
   assert.equal(provider.requestCount(), 3);
+  assert.match(provider.lastRequest().messages[1].content, /CUSTOM TEMPLATE/);
+  assert.match(provider.lastRequest().messages[1].content, new RegExp(`Slug: ${markdownItem.slug}`));
+  assert.doesNotMatch(provider.lastRequest().messages[1].content, /\{\{material_title\}\}/);
 });
 
 async function startStubDeepSeek(t, options = {}) {

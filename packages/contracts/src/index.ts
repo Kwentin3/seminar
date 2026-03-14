@@ -230,6 +230,7 @@ export const cabinetLlmSimplifySettingsSchema = z.object({
   provider: cabinetLlmProviderSchema,
   model: z.string().min(1),
   system_prompt: z.string().min(1),
+  user_prompt_template: z.string().min(1),
   prompt_version: z.string().min(1),
   temperature: z.number().finite().nullable(),
   max_output_tokens: z.number().int().positive().nullable(),
@@ -249,6 +250,7 @@ export const updateCabinetLlmSimplifySettingsRequestSchema = z.object({
   feature_enabled: z.boolean(),
   model: z.string().trim().min(1).max(120),
   system_prompt: z.string().trim().min(1).max(20_000),
+  user_prompt_template: z.string().trim().min(1).max(40_000),
   temperature: z.number().finite().nullable(),
   max_output_tokens: z.number().int().positive().nullable()
 });
