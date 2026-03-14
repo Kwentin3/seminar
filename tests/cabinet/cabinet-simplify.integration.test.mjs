@@ -92,6 +92,33 @@ test("cabinet simplify generates once, caches by identity, and regenerate overwr
   assert.match(cachedRows[0].generated_markdown, /Упрощённый пересказ #2/);
 });
 
+test("cabinet simplify does not send max_tokens when no explicit output cap is configured", async (t) => {
+  const provider = await startStubDeepSeek(t);
+  const server = await startServer(t, {
+    DEEPSEEK_API_KEY: "test-deepseek-key",
+    DEEPSEEK_BASE_URL: provider.baseUrl
+  });
+
+  const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
+  const materials = await fetchMaterials(server.baseUrl, adminCookie);
+  const markdownItem = materials.items.find((item) => item.reading_mode === "in_app");
+  assert.ok(markdownItem, "expected markdown item");
+
+  const response = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+    method: "POST",
+    headers: {
+      Cookie: adminCookie,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ force: false })
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.state.status, "ready");
+  assert.equal(provider.requestCount(), 1);
+  assert.equal("max_tokens" in provider.lastRequest(), false);
+});
+
 test("cabinet simplify persists typed timeout failures and emits redacted diagnostics", async (t) => {
   const provider = await startStubDeepSeek(t, {
     delayMs: 120,
@@ -141,6 +168,54 @@ test("cabinet simplify persists typed timeout failures and emits redacted diagno
   assert.match(stdout, /"abort_fired":true/);
   assert.doesNotMatch(stdout, /Исходный документ:/);
   assert.doesNotMatch(stdout, /Поздний ответ провайдера/);
+});
+
+test("cabinet simplify marks truncated provider completions as ready-with-warning", async (t) => {
+  const provider = await startStubDeepSeek(t, {
+    finishReason: "length",
+    content: "# Упрощённый пересказ\n\nТекст заметно обрывается на середине мысли"
+  });
+  const server = await startServer(t, {
+    DEEPSEEK_API_KEY: "test-deepseek-key",
+    DEEPSEEK_BASE_URL: provider.baseUrl
+  });
+
+  const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
+  const materials = await fetchMaterials(server.baseUrl, adminCookie);
+  const markdownItem = materials.items.find((item) => item.reading_mode === "in_app");
+  assert.ok(markdownItem, "expected markdown item");
+
+  const response = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+    method: "POST",
+    headers: {
+      Cookie: adminCookie,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ force: false })
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.state.status, "ready");
+  assert.equal(payload.state.delivery_mode, "generated");
+  assert.equal(payload.state.error_code, "output_truncated");
+  assert.match(payload.state.error_message, /обрезан по лимиту длины/i);
+  assert.match(payload.state.content, /обрывается/);
+
+  const database = new DatabaseSync(server.databasePath, { readOnly: true });
+  const cachedRow = database
+    .prepare("SELECT status, error_code, error_message, generated_markdown FROM material_simplifications WHERE material_id = (SELECT id FROM materials WHERE slug = ?)")
+    .get(markdownItem.slug);
+  database.close();
+
+  assert.equal(cachedRow.status, "ready");
+  assert.equal(cachedRow.error_code, "output_truncated");
+  assert.match(cachedRow.error_message, /обрезан по лимиту длины/i);
+  assert.match(cachedRow.generated_markdown, /обрывается/);
+
+  await waitForCondition(() => server.getStdout().includes("cabinet_material_simplify_provider_call_completed"));
+  const stdout = server.getStdout();
+  assert.match(stdout, /"finish_reason":"length"/);
+  assert.match(stdout, /"output_truncated":true/);
 });
 
 test("cabinet simplify settings are admin-only, connection test is terminal, and prompt changes make existing cache stale", async (t) => {
@@ -322,6 +397,7 @@ async function startStubDeepSeek(t, options = {}) {
       JSON.stringify({
         choices: [
           {
+            finish_reason: options.finishReason ?? "stop",
             message: {
               content: options.content ?? `# Упрощённый пересказ #${sequence}\n\nКороткая версия материала для лектора.`
             }

@@ -233,6 +233,8 @@ type CabinetMessages = {
       generatedNow: string;
       generating: string;
       disabledBadge: string;
+      truncatedWarning: string;
+      truncatedHint: string;
       generatedAt: string;
       regenerate: string;
       regenerating: string;
@@ -561,6 +563,8 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           generatedNow: "Сгенерировано",
           generating: "Генерируется",
           disabledBadge: "Недоступно",
+          truncatedWarning: "Текст пересказа был обрезан по лимиту длины.",
+          truncatedHint: "Если пересказ обрывается, увеличьте Max output tokens в LLM-настройках и перегенерируйте.",
           generatedAt: "Сгенерировано: {value}",
           regenerate: "Перегенерировать",
           regenerating: "Перегенерируем...",
@@ -881,6 +885,8 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           generatedNow: "Generated",
           generating: "Generating",
           disabledBadge: "Unavailable",
+          truncatedWarning: "The simplified text was cut off by the output length limit.",
+          truncatedHint: "If the retelling stops mid-text, increase Max output tokens in LLM settings and regenerate.",
           generatedAt: "Generated: {value}",
           regenerate: "Regenerate",
           regenerating: "Regenerating...",

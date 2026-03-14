@@ -47,9 +47,16 @@ test("deepseek client classifies timeout, upstream http, parse, and empty respon
       return;
     }
 
+    if (mode === "truncated") {
+      response.statusCode = 200;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ choices: [{ finish_reason: "length", message: { content: "partial answer" } }] }));
+      return;
+    }
+
     response.statusCode = 200;
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({ choices: [{ message: { content: "ok" } }] }));
+    response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "ok" } }] }));
   });
 
   await new Promise((resolve) => {
@@ -176,4 +183,16 @@ test("deepseek client classifies timeout, upstream http, parse, and empty respon
   });
   assert.equal(completion.content, "ok");
   assert.equal(completion.diagnostics.provider_http_status, 200);
+  assert.equal(completion.diagnostics.finish_reason, "stop");
+  assert.equal(completion.diagnostics.output_truncated, false);
+
+  globalThis.__deepseek_test_mode = "truncated";
+  const truncatedCompletion = await client.createChatCompletion({
+    model: "deepseek-chat",
+    systemPrompt: "system",
+    userPrompt: "user"
+  });
+  assert.equal(truncatedCompletion.content, "partial answer");
+  assert.equal(truncatedCompletion.diagnostics.finish_reason, "length");
+  assert.equal(truncatedCompletion.diagnostics.output_truncated, true);
 });

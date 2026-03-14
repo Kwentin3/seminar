@@ -721,6 +721,12 @@ function SimplifiedPanel({
           {state.status === "stale" ? messages.stale : state.delivery_mode === "generated" ? messages.generatedNow : messages.fromCache}
         </p>
         {state.generated_at ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{messages.generatedAt.replace("{value}", formatShortDate(state.generated_at))}</p> : null}
+        {state.error_code === "output_truncated" ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+            <p className="font-medium">{messages.truncatedWarning}</p>
+            <p className="mt-1">{messages.truncatedHint}</p>
+          </div>
+        ) : null}
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{messages.disclaimer}</p>
       </div>
 

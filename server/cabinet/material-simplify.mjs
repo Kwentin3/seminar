@@ -271,6 +271,13 @@ function normalizeStoredError(error) {
     };
   }
 
+  if (code === "output_truncated") {
+    return {
+      error_code: code,
+      error_message: "Ответ провайдера был обрезан по лимиту длины. Увеличьте max output tokens и перегенерируйте."
+    };
+  }
+
   return {
     error_code: code,
     error_message: "Не удалось получить пересказ."
@@ -282,7 +289,15 @@ function getEffectiveMaxOutputTokens(settings, llmConfig) {
     return settings.max_output_tokens;
   }
 
-  return llmConfig.defaultMaxOutputTokens;
+  if (
+    typeof llmConfig.defaultMaxOutputTokens === "number" &&
+    Number.isInteger(llmConfig.defaultMaxOutputTokens) &&
+    llmConfig.defaultMaxOutputTokens > 0
+  ) {
+    return llmConfig.defaultMaxOutputTokens;
+  }
+
+  return null;
 }
 
 function getProviderDiagnostics(error) {
@@ -305,6 +320,8 @@ function getProviderDiagnostics(error) {
       typeof diagnostics.provider_http_status === "number" && Number.isInteger(diagnostics.provider_http_status)
         ? diagnostics.provider_http_status
         : null,
+    finish_reason: readString(diagnostics.finish_reason),
+    output_truncated: diagnostics.output_truncated === true,
     provider_message: truncateDiagnosticMessage(diagnostics.provider_message),
     abort_fired: diagnostics.abort_fired === true,
     provider_duration_ms:
@@ -850,8 +867,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
           config_hash: context.configHash,
           status: "ready",
           generated_markdown: content,
-          error_code: null,
-          error_message: null,
+          error_code: providerDiagnostics.output_truncated ? "output_truncated" : null,
+          error_message: providerDiagnostics.output_truncated
+            ? "Ответ провайдера был обрезан по лимиту длины. Увеличьте max output tokens и перегенерируйте."
+            : null,
           created_at: currentRow?.created_at ?? now,
           updated_at: completedAt,
           generated_at: completedAt
@@ -872,7 +891,9 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
             cache_intent: force ? "regenerate" : "cache_miss",
             provider_http_status: providerDiagnostics.provider_http_status,
             provider_duration_ms: providerDiagnostics.provider_duration_ms,
-            abort_fired: providerDiagnostics.abort_fired
+            abort_fired: providerDiagnostics.abort_fired,
+            finish_reason: providerDiagnostics.finish_reason,
+            output_truncated: providerDiagnostics.output_truncated
           }
         });
 
@@ -884,6 +905,10 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
             content,
             generated_at: completedAt,
             updated_at: completedAt,
+            error_code: providerDiagnostics.output_truncated ? "output_truncated" : null,
+            error_message: providerDiagnostics.output_truncated
+              ? "Ответ провайдера был обрезан по лимиту длины. Увеличьте max output tokens и перегенерируйте."
+              : null,
             can_regenerate: true
           })
         };

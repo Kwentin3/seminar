@@ -54,6 +54,11 @@ function readResponseText(payload) {
   return typeof content === "string" && content.trim().length > 0 ? content.trim() : null;
 }
 
+function readFinishReason(payload) {
+  const finishReason = payload?.choices?.[0]?.finish_reason;
+  return typeof finishReason === "string" && finishReason.trim().length > 0 ? finishReason.trim() : null;
+}
+
 function toProviderError(responseStatus, payload, diagnostics = null) {
   const normalized = normalizeErrorPayload(payload);
   if (responseStatus === 401 || responseStatus === 403) {
@@ -246,13 +251,18 @@ export function createDeepSeekClient(config, options = {}) {
         });
       }
 
+      const finishReason = readFinishReason(payload);
+      const outputTruncated = finishReason === "length";
+
       return {
         content,
         diagnostics: {
           stage: "completed",
           duration_ms: durationMs,
           abort_fired: signal?.aborted === true,
-          provider_http_status: response.status
+          provider_http_status: response.status,
+          finish_reason: finishReason,
+          output_truncated: outputTruncated
         }
       };
     }
