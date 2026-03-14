@@ -9,6 +9,8 @@ core_snapshot: docs/epics/EPIC-002.cabinet.auth-foundation/CONTEXT_SNAPSHOT.md
 related:
   - docs/reports/2026-03-13/DEPLOY.anamnesis.pre-cabinet-go-live.report.md
   - docs/notes/NOTE-006.deploy-contour-reality.md
+  - docs/reports/2026-03-13/CABINET.go-live.report.md
+  - docs/reports/2026-03-13/CABINET.ux-polish.deploy.report.md
   - docs/runbooks/DEPLOY_DOCKER_CONTRACT.md
   - docs/runbooks/ENV_MATRIX.md
   - docs/runbooks/GO_LIVE.md
@@ -72,12 +74,18 @@ Do not use by default:
 4. legacy CI `deploy` job that still targets the systemd path
 
 ## Cabinet First Go-Live Caveats
-Before the first live cabinet rollout:
-1. production DB is still pre-cabinet
-2. cabinet bootstrap envs are not present by default
-3. temporary create-first bootstrap envs must be added intentionally
-4. `CABINET_BOOTSTRAP_ALLOW_RESET` must stay unset unless an intentional one-time reset is required
-5. pre-deploy SQLite triplet backup is mandatory
+Current status after `2026-03-13` go-live:
+1. cabinet is live on `seminar-ai.ru`
+2. production DB includes cabinet migrations through `0004`
+3. first bootstrap login has already been completed
+4. bootstrap-sensitive envs were cleaned up after go-live
+5. current active production build after the UX polish rollout:
+   - digest: `sha256:7c3e163febd1550b9fdf3ec1869c11bf1c5fc9cd585cc4ae0e856b105359bafd`
+   - build id: `1ce86ba9c586b8ae4dae55797444e78fc1981430`
+6. latest pre-deploy backup reference:
+   - `/opt/seminar/backups/ux-polish-rollout-20260313T193051Z`
+7. pre-deploy backup reference for the first cabinet rollout:
+   - `/opt/seminar/backups/cabinet-go-live-20260313T135120Z`
 
 ## Operational Assumptions Already Closed
 1. Canonical production contour is Docker + Traefik.
@@ -86,7 +94,6 @@ Before the first live cabinet rollout:
 4. The next deploy prompt must be written against Docker-only rollout.
 
 ## Open Caveats Before Real Go-Live
-1. Cabinet is not live yet on the domain.
-2. Production DB has not applied cabinet migrations yet.
-3. `www -> apex` behavior does not appear to match documented redirect intent.
-4. `ai-work.pro` still points to the VPS by DNS but is not part of the active seminar routing labels.
+1. `www -> apex` behavior still does not appear to match documented redirect intent.
+2. `ai-work.pro` still points to the VPS by DNS but is not part of the active seminar routing labels.
+3. Legacy CI `deploy` job remains present as rollback-only residue and still should not be treated as the default release action.
