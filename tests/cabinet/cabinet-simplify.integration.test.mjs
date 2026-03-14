@@ -92,6 +92,114 @@ test("cabinet simplify generates once, caches by identity, and regenerate overwr
   assert.match(cachedRows[0].generated_markdown, /Упрощённый пересказ #2/);
 });
 
+test("cabinet simplify streaming endpoint emits progressive deltas, writes final cache, and regenerate preserves cache discipline", async (t) => {
+  const provider = await startStubDeepSeek(t, {
+    streamChunks: ["# Поток #1\n\n", "Первая часть.\n\n", "Вторая часть."]
+  });
+  const server = await startServer(t, {
+    DEEPSEEK_API_KEY: "test-deepseek-key",
+    DEEPSEEK_BASE_URL: provider.baseUrl,
+    LLM_SIMPLIFY_TIMEOUT_MS: "2000"
+  });
+
+  const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
+  const materials = await fetchMaterials(server.baseUrl, adminCookie);
+  const markdownItem = materials.items.find((item) => item.reading_mode === "in_app");
+  assert.ok(markdownItem, "expected markdown item");
+
+  const firstStream = await consumeSimplifyStream(server.baseUrl, markdownItem.slug, adminCookie);
+  assert.deepEqual(firstStream.eventTypes.slice(0, 4), ["open", "meta", "delta", "delta"]);
+  assert.equal(firstStream.doneEvent?.data.result, "normal_success");
+  assert.match(firstStream.concatenatedDeltaText, /Первая часть/);
+  assert.match(firstStream.concatenatedDeltaText, /Вторая часть/);
+  assert.equal(provider.requestCount(), 1);
+
+  const database = new DatabaseSync(server.databasePath, { readOnly: true });
+  const readyRow = database
+    .prepare("SELECT status, generated_markdown FROM material_simplifications WHERE material_id = (SELECT id FROM materials WHERE slug = ?)")
+    .get(markdownItem.slug);
+  database.close();
+
+  assert.equal(readyRow.status, "ready");
+  assert.match(readyRow.generated_markdown, /Вторая часть/);
+
+  const cachedStateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+    headers: {
+      Cookie: adminCookie
+    }
+  });
+  assert.equal(cachedStateResponse.status, 200);
+  const cachedStatePayload = await cachedStateResponse.json();
+  assert.equal(cachedStatePayload.state.status, "ready");
+  assert.equal(cachedStatePayload.state.delivery_mode, "cache");
+  assert.equal(provider.requestCount(), 1);
+
+  provider.setStreamChunks(["# Поток #2\n\n", "Новая версия пересказа."]);
+  const regenerateStream = await consumeSimplifyStream(server.baseUrl, markdownItem.slug, adminCookie, {
+    force: true
+  });
+  assert.equal(regenerateStream.doneEvent?.data.result, "normal_success");
+  assert.match(regenerateStream.concatenatedDeltaText, /Новая версия пересказа/);
+  assert.equal(provider.requestCount(), 2);
+
+  const databaseAfterRegenerate = new DatabaseSync(server.databasePath, { readOnly: true });
+  const refreshedRow = databaseAfterRegenerate
+    .prepare("SELECT status, generated_markdown FROM material_simplifications WHERE material_id = (SELECT id FROM materials WHERE slug = ?)")
+    .get(markdownItem.slug);
+  databaseAfterRegenerate.close();
+  assert.equal(refreshedRow.status, "ready");
+  assert.match(refreshedRow.generated_markdown, /Новая версия пересказа/);
+});
+
+test("cabinet simplify streaming interruptions do not persist partial output as ready cache entries", async (t) => {
+  const provider = await startStubDeepSeek(t, {
+    streamChunks: ["# Сохранённая версия\n\n", "Нормальный итог."]
+  });
+  const server = await startServer(t, {
+    DEEPSEEK_API_KEY: "test-deepseek-key",
+    DEEPSEEK_BASE_URL: provider.baseUrl,
+    LLM_SIMPLIFY_TIMEOUT_MS: "2000"
+  });
+
+  const adminCookie = await login(server.baseUrl, "simplify-admin", "simplify-admin-pass");
+  const materials = await fetchMaterials(server.baseUrl, adminCookie);
+  const markdownItem = materials.items.find((item) => item.reading_mode === "in_app");
+  assert.ok(markdownItem, "expected markdown item");
+
+  const warmupStream = await consumeSimplifyStream(server.baseUrl, markdownItem.slug, adminCookie);
+  assert.equal(warmupStream.doneEvent?.data.result, "normal_success");
+  assert.equal(provider.requestCount(), 1);
+
+  provider.setMode("stream_interrupted");
+  provider.setStreamChunks(["Частичный ", "ответ"]);
+  const failedRegenerateStream = await consumeSimplifyStream(server.baseUrl, markdownItem.slug, adminCookie, {
+    force: true
+  });
+  assert.equal(failedRegenerateStream.errorEvent?.data.error_code, "stream_interrupted");
+  assert.match(failedRegenerateStream.concatenatedDeltaText, /Частичный ответ/);
+  assert.equal(failedRegenerateStream.errorEvent?.data.cache_preserved, true);
+  assert.equal(provider.requestCount(), 2);
+
+  const cachedStateResponse = await fetch(`${server.baseUrl}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+    headers: {
+      Cookie: adminCookie
+    }
+  });
+  assert.equal(cachedStateResponse.status, 200);
+  const cachedStatePayload = await cachedStateResponse.json();
+  assert.equal(cachedStatePayload.state.status, "ready");
+  assert.equal(cachedStatePayload.state.delivery_mode, "cache");
+  assert.match(cachedStatePayload.state.content, /Сохранённая версия/);
+
+  const database = new DatabaseSync(server.databasePath, { readOnly: true });
+  const cachedRow = database
+    .prepare("SELECT status, generated_markdown FROM material_simplifications WHERE material_id = (SELECT id FROM materials WHERE slug = ?)")
+    .get(markdownItem.slug);
+  database.close();
+  assert.equal(cachedRow.status, "ready");
+  assert.match(cachedRow.generated_markdown, /Сохранённая версия/);
+});
+
 test("cabinet simplify does not send max_tokens when no explicit output cap is configured", async (t) => {
   const provider = await startStubDeepSeek(t);
   const server = await startServer(t, {
@@ -433,6 +541,10 @@ test("cabinet simplify settings expose effective config and block oversized sour
 
 async function startStubDeepSeek(t, options = {}) {
   const requests = [];
+  let currentMode = options.mode ?? "success";
+  let currentStreamChunks = Array.isArray(options.streamChunks) && options.streamChunks.length > 0
+    ? [...options.streamChunks]
+    : null;
   const server = http.createServer(async (request, response) => {
     if (request.method !== "POST" || request.url !== "/chat/completions") {
       response.statusCode = 404;
@@ -453,20 +565,54 @@ async function startStubDeepSeek(t, options = {}) {
       await new Promise((resolve) => setTimeout(resolve, options.delayMs));
     }
 
-    if (options.mode === "rate_limit") {
+    if (payload.stream === true) {
+      if (currentMode === "stream_interrupted") {
+        response.statusCode = 200;
+        response.setHeader("content-type", "text/event-stream");
+        const interruptedChunks = currentStreamChunks ?? ["Частичный ответ"];
+        for (const chunk of interruptedChunks) {
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`);
+        }
+        response.end();
+        return;
+      }
+
+      if (currentMode === "stream_timeout_before") {
+        response.statusCode = 200;
+        response.setHeader("content-type", "text/event-stream");
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        response.end();
+        return;
+      }
+
+      response.statusCode = 200;
+      response.setHeader("content-type", "text/event-stream");
+      const streamChunks =
+        currentStreamChunks ?? [options.content ?? `# Упрощённый пересказ #${sequence}\n\nКороткая версия материала для лектора.`];
+      for (const chunk of streamChunks) {
+        response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      response.write(`data: ${JSON.stringify({ choices: [{ finish_reason: options.finishReason ?? "stop" }] })}\n\n`);
+      response.write("data: [DONE]\n\n");
+      response.end();
+      return;
+    }
+
+    if (currentMode === "rate_limit") {
       response.statusCode = 429;
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ error: { code: "rate_limit_exceeded", message: "slow down" } }));
       return;
     }
 
-    if (options.mode === "malformed_json") {
+    if (currentMode === "malformed_json") {
       response.setHeader("content-type", "application/json");
       response.end("{invalid");
       return;
     }
 
-    if (options.mode === "empty_response") {
+    if (currentMode === "empty_response") {
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ choices: [{ message: { content: "   " } }] }));
       return;
@@ -506,7 +652,109 @@ async function startStubDeepSeek(t, options = {}) {
     },
     lastRequest() {
       return requests.at(-1) ?? null;
+    },
+    setMode(nextMode) {
+      currentMode = nextMode;
+    },
+    setStreamChunks(nextChunks) {
+      currentStreamChunks = Array.isArray(nextChunks) ? [...nextChunks] : null;
     }
+  };
+}
+
+async function consumeSimplifyStream(baseUrl, slug, cookie, options = {}) {
+  const response = await fetch(`${baseUrl}/api/cabinet/materials/${slug}/simplify/stream?force=${options.force ? "1" : "0"}`, {
+    headers: {
+      Cookie: cookie,
+      Accept: "text/event-stream"
+    }
+  });
+
+  assert.equal(response.status, 200);
+  assert.ok(response.body, "expected streaming response body");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const events = [];
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    while (true) {
+      const nextFrame = takeNextSseFrame(buffer);
+      if (!nextFrame) {
+        break;
+      }
+
+      buffer = nextFrame.rest;
+      const event = parseStreamFrame(nextFrame.frame);
+      if (event) {
+        events.push(event);
+      }
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim().length > 0) {
+    const event = parseStreamFrame(buffer);
+    if (event) {
+      events.push(event);
+    }
+  }
+
+  return {
+    events,
+    eventTypes: events.map((event) => event.type),
+    concatenatedDeltaText: events
+      .filter((event) => event.type === "delta")
+      .map((event) => event.data.text)
+      .join(""),
+    doneEvent: events.find((event) => event.type === "done") ?? null,
+    errorEvent: events.find((event) => event.type === "error") ?? null
+  };
+}
+
+function takeNextSseFrame(buffer) {
+  const unixIndex = buffer.indexOf("\n\n");
+  if (unixIndex >= 0) {
+    return {
+      frame: buffer.slice(0, unixIndex),
+      rest: buffer.slice(unixIndex + 2)
+    };
+  }
+
+  const windowsIndex = buffer.indexOf("\r\n\r\n");
+  if (windowsIndex >= 0) {
+    return {
+      frame: buffer.slice(0, windowsIndex),
+      rest: buffer.slice(windowsIndex + 4)
+    };
+  }
+
+  return null;
+}
+
+function parseStreamFrame(frame) {
+  const normalizedFrame = frame.replace(/\r/g, "");
+  const lines = normalizedFrame.split("\n");
+  const type = lines.find((line) => line.startsWith("event:"))?.slice("event:".length).trim();
+  const data = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice("data:".length).trim())
+    .join("\n");
+
+  if (!type || data.length === 0) {
+    return null;
+  }
+
+  return {
+    type,
+    data: JSON.parse(data)
   };
 }
 

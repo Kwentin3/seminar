@@ -243,6 +243,34 @@ function normalizeStoredError(error) {
     };
   }
 
+  if (code === "timeout_before_first_chunk") {
+    return {
+      error_code: code,
+      error_message: "Модель слишком долго не начинала ответ. Попробуйте ещё раз."
+    };
+  }
+
+  if (code === "timeout_mid_stream") {
+    return {
+      error_code: code,
+      error_message: "Генерация прервалась по таймауту после начала ответа."
+    };
+  }
+
+  if (code === "stream_open_failed") {
+    return {
+      error_code: code,
+      error_message: "Не удалось открыть поток ответа от модели."
+    };
+  }
+
+  if (code === "stream_interrupted") {
+    return {
+      error_code: code,
+      error_message: "Поток ответа прервался до завершения."
+    };
+  }
+
   if (code === "upstream_http_error") {
     return {
       error_code: code,
@@ -382,6 +410,27 @@ function getProviderDiagnostics(error) {
     abort_fired: diagnostics.abort_fired === true,
     provider_duration_ms:
       typeof diagnostics.duration_ms === "number" && Number.isFinite(diagnostics.duration_ms) ? diagnostics.duration_ms : null,
+    time_to_first_chunk_ms:
+      typeof diagnostics.time_to_first_chunk_ms === "number" && Number.isFinite(diagnostics.time_to_first_chunk_ms)
+        ? diagnostics.time_to_first_chunk_ms
+        : null,
+    stream_duration_ms:
+      typeof diagnostics.stream_duration_ms === "number" && Number.isFinite(diagnostics.stream_duration_ms)
+        ? diagnostics.stream_duration_ms
+        : null,
+    first_chunk_at_ms:
+      typeof diagnostics.first_chunk_at_ms === "number" && Number.isFinite(diagnostics.first_chunk_at_ms)
+        ? diagnostics.first_chunk_at_ms
+        : null,
+    last_chunk_at_ms:
+      typeof diagnostics.last_chunk_at_ms === "number" && Number.isFinite(diagnostics.last_chunk_at_ms)
+        ? diagnostics.last_chunk_at_ms
+        : null,
+    streamed_chars:
+      typeof diagnostics.streamed_chars === "number" && Number.isFinite(diagnostics.streamed_chars)
+        ? diagnostics.streamed_chars
+        : null,
+    received_done: diagnostics.received_done === true,
     response_content_type: readString(diagnostics.response_content_type),
     response_body_length:
       typeof diagnostics.response_body_length === "number" && Number.isFinite(diagnostics.response_body_length)
@@ -696,6 +745,58 @@ function mapContextToBase(context) {
     canGenerate: context.settings.feature_enabled && context.keyConfigured,
     sourceUpdatedAtSnapshot: context.material.source_updated_at ?? null
   };
+}
+
+function hasCachedFallbackState(state) {
+  return state?.status === "ready" || state?.status === "stale";
+}
+
+function buildCacheIntent(force, currentState) {
+  if (force) {
+    return "regenerate";
+  }
+
+  if (currentState?.status === "stale") {
+    return "stale_refresh";
+  }
+
+  return "cache_miss";
+}
+
+function createStoredRowSeed(context, currentRow, nowIso) {
+  return {
+    id: currentRow?.id ?? randomUUID(),
+    material_id: context.material.id,
+    feature_kind: FEATURE_KIND,
+    provider: context.settings.provider,
+    model: context.settings.model,
+    source_hash: context.sourceHash,
+    source_updated_at_snapshot: context.material.source_updated_at ?? null,
+    prompt_hash: context.promptHash,
+    config_hash: context.configHash,
+    created_at: currentRow?.created_at ?? nowIso
+  };
+}
+
+function buildTooLargeError(context) {
+  return normalizeStoredError({
+    code: "content_too_large",
+    message:
+      context.sourceSizeAssessment.reason === "hard_guardrail"
+        ? `Документ превышает жёсткий single-pass guardrail (${context.sourceSizeAssessment.hard_limit} символов).`
+        : `Документ превышает настроенный single-pass лимит (${context.sourceSizeAssessment.configured_limit} символов).`
+  });
+}
+
+async function emitStreamEvent(onEvent, type, data) {
+  if (typeof onEvent !== "function") {
+    return;
+  }
+
+  await onEvent({
+    type,
+    data
+  });
 }
 
 function resolveState(context, currentRow, latestRow) {
@@ -1128,6 +1229,401 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
     return generationPromise;
   }
 
+  async function streamGenerate(slug, { force = false, onEvent } = {}) {
+    const loaded = loadContext(slug);
+    if (!loaded.ok) {
+      return loaded;
+    }
+
+    const context = loaded.context;
+    const identity = createIdentity(context);
+    const currentRow = readCurrentRow(database, identity);
+    const latestRow = readLatestRowForMaterial(database, context.material.id);
+    const currentState = resolveState(context, currentRow, latestRow);
+    const hasCachedFallback = hasCachedFallbackState(currentState);
+    const cacheIntent = buildCacheIntent(force, currentState);
+
+    await emitStreamEvent(onEvent, "open", {
+      slug: context.material.slug,
+      force
+    });
+    await emitStreamEvent(onEvent, "meta", {
+      provider: context.settings.provider,
+      model: context.settings.model,
+      prompt_version: context.settings.prompt_version,
+      timeout_ms: context.effectiveRequestTimeoutMs,
+      max_output_tokens: context.effectiveMaxOutputTokens,
+      max_source_chars: context.effectiveMaxSourceChars,
+      source_chars: context.markdown.length,
+      cache_intent: cacheIntent,
+      has_cached_fallback: hasCachedFallback
+    });
+
+    if (!force && currentState.status === "ready") {
+      await emitStreamEvent(onEvent, "done", {
+        result: "cache_ready",
+        state: currentState
+      });
+      return {
+        ok: true,
+        state: currentState
+      };
+    }
+
+    if (currentState.status === "disabled") {
+      await emitStreamEvent(onEvent, "error", {
+        error_code: currentState.disabled_reason === "key_missing" ? "config_missing" : "feature_disabled",
+        error_message: currentState.disabled_reason === "key_missing"
+          ? "DeepSeek API key не настроен."
+          : "Reader-пересказ сейчас отключён.",
+        state: currentState,
+        cache_preserved: hasCachedFallback
+      });
+      return {
+        ok: true,
+        state: currentState
+      };
+    }
+
+    if (context.sourceSizeAssessment.oversized && context.sourceSizeAssessment.reason === "allow_with_warning") {
+      await emitStreamEvent(onEvent, "warning", {
+        code: "oversized_source",
+        message: "Документ превышает preferred single-pass limit и может отвечать нестабильно."
+      });
+    }
+
+    if (context.sourceSizeAssessment.block) {
+      const now = new Date().toISOString();
+      const storedError = buildTooLargeError(context);
+      const failedState = makeState(mapContextToBase(context), {
+        status: "failed",
+        error_code: storedError.error_code,
+        error_message: storedError.error_message,
+        updated_at: now,
+        can_regenerate: true
+      });
+
+      if (!hasCachedFallback) {
+        upsertSimplificationRow(database, {
+          ...createStoredRowSeed(context, currentRow, now),
+          status: "failed",
+          generated_markdown: null,
+          error_code: storedError.error_code,
+          error_message: storedError.error_message,
+          updated_at: now,
+          generated_at: null
+        });
+      }
+
+      await emitStreamEvent(onEvent, "error", {
+        error_code: storedError.error_code,
+        error_message: storedError.error_message,
+        state: hasCachedFallback ? currentState : failedState,
+        cache_preserved: hasCachedFallback
+      });
+      return {
+        ok: true,
+        state: hasCachedFallback ? currentState : failedState
+      };
+    }
+
+    const existingInflight = inflightGenerations.get(identity.key);
+    if (existingInflight) {
+      const result = await existingInflight;
+      if (result.ok && result.state.status === "ready") {
+        await emitStreamEvent(onEvent, "done", {
+          result: "normal_success",
+          state: result.state
+        });
+      } else if (result.ok) {
+        await emitStreamEvent(onEvent, "error", {
+          error_code: result.state.error_code ?? "stream_open_failed",
+          error_message: result.state.error_message ?? "Поток уже выполняется в другом запросе.",
+          state: result.state,
+          cache_preserved: hasCachedFallback
+        });
+      }
+      return result;
+    }
+
+    if (currentState.status === "generating") {
+      await emitStreamEvent(onEvent, "error", {
+        error_code: "stream_open_failed",
+        error_message: "Генерация уже выполняется. Дождитесь завершения текущего запроса.",
+        state: currentState,
+        cache_preserved: hasCachedFallback
+      });
+      return {
+        ok: true,
+        state: currentState
+      };
+    }
+
+    const now = new Date().toISOString();
+    const persistInterimState = !hasCachedFallback;
+    if (persistInterimState) {
+      upsertSimplificationRow(database, {
+        ...createStoredRowSeed(context, currentRow, now),
+        status: "generating",
+        generated_markdown: null,
+        error_code: null,
+        error_message: null,
+        updated_at: now,
+        generated_at: null
+      });
+    }
+
+    const generationPromise = (async () => {
+      const startedAt = Date.now();
+      let firstChunkLogged = false;
+      let observedStreamedChars = 0;
+
+      try {
+        logger.info({
+          event: "cabinet_material_simplify_stream_started",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            mode: "stream",
+            timeout_ms: context.effectiveRequestTimeoutMs,
+            max_output_tokens: context.effectiveMaxOutputTokens,
+            max_source_chars: context.effectiveMaxSourceChars,
+            oversized_source: context.sourceSizeAssessment.oversized,
+            source_chars: context.markdown.length,
+            cache_intent: cacheIntent,
+            cache_preserved: hasCachedFallback
+          }
+        });
+
+        const completion = await client.streamChatCompletion({
+          model: context.settings.model,
+          systemPrompt: context.settings.system_prompt,
+          userPrompt: createUserPrompt(context.settings, context.material, context.markdown),
+          temperature: context.settings.temperature,
+          maxOutputTokens: context.effectiveMaxOutputTokens,
+          signal: AbortSignal.timeout(context.effectiveRequestTimeoutMs),
+          onDelta: async (delta) => {
+            observedStreamedChars += delta.length;
+            if (!firstChunkLogged) {
+              firstChunkLogged = true;
+              logger.info({
+                event: "cabinet_material_simplify_first_chunk_detected",
+                domain: "cabinet",
+                module: "cabinet/material-simplify-service",
+                payload: {
+                  slug: context.material.slug,
+                  material_id: context.material.id,
+                  provider: context.settings.provider,
+                  model: context.settings.model,
+                  mode: "stream",
+                  cache_intent: cacheIntent,
+                  time_to_first_chunk_ms: Date.now() - startedAt
+                }
+              });
+            }
+
+            await emitStreamEvent(onEvent, "delta", {
+              text: delta,
+              streamed_chars: observedStreamedChars
+            });
+          }
+        });
+
+        const completedAt = new Date().toISOString();
+        const providerDiagnostics = getProviderDiagnostics(completion);
+        const content = completion.content.trim();
+        if (providerDiagnostics.output_truncated) {
+          const storedError = normalizeStoredError({ code: "output_truncated" });
+          const failedState = makeState(mapContextToBase(context), {
+            status: "failed",
+            error_code: storedError.error_code,
+            error_message: storedError.error_message,
+            updated_at: completedAt,
+            can_regenerate: true
+          });
+
+          if (persistInterimState) {
+            upsertSimplificationRow(database, {
+              ...createStoredRowSeed(context, currentRow, now),
+              status: "failed",
+              generated_markdown: null,
+              error_code: storedError.error_code,
+              error_message: storedError.error_message,
+              updated_at: completedAt,
+              generated_at: null
+            });
+          }
+
+          logger.warn({
+            event: "cabinet_material_simplify_stream_failed",
+            domain: "cabinet",
+            module: "cabinet/material-simplify-service",
+            payload: {
+              slug: context.material.slug,
+              material_id: context.material.id,
+              provider: context.settings.provider,
+              model: context.settings.model,
+              mode: "stream",
+              cache_intent: cacheIntent,
+              cache_preserved: hasCachedFallback,
+              cache_write_skipped: true,
+              error_code: storedError.error_code,
+              finish_reason: providerDiagnostics.finish_reason,
+              received_done: providerDiagnostics.received_done,
+              time_to_first_chunk_ms: providerDiagnostics.time_to_first_chunk_ms,
+              stream_duration_ms: providerDiagnostics.stream_duration_ms,
+              first_chunk_at_ms: providerDiagnostics.first_chunk_at_ms,
+              last_chunk_at_ms: providerDiagnostics.last_chunk_at_ms,
+              streamed_chars: providerDiagnostics.streamed_chars,
+              provider_http_status: providerDiagnostics.provider_http_status
+            }
+          });
+
+          await emitStreamEvent(onEvent, "warning", {
+            code: storedError.error_code,
+            message: storedError.error_message
+          });
+          await emitStreamEvent(onEvent, "error", {
+            error_code: storedError.error_code,
+            error_message: storedError.error_message,
+            state: hasCachedFallback ? currentState : failedState,
+            cache_preserved: hasCachedFallback
+          });
+          return {
+            ok: true,
+            state: hasCachedFallback ? currentState : failedState
+          };
+        }
+
+        upsertSimplificationRow(database, {
+          ...createStoredRowSeed(context, currentRow, now),
+          status: "ready",
+          generated_markdown: content,
+          error_code: null,
+          error_message: null,
+          updated_at: completedAt,
+          generated_at: completedAt
+        });
+
+        const readyState = makeState(mapContextToBase(context), {
+          status: "ready",
+          delivery_mode: "generated",
+          content,
+          generated_at: completedAt,
+          updated_at: completedAt,
+          can_regenerate: true
+        });
+
+        logger.info({
+          event: "cabinet_material_simplify_stream_completed",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            mode: "stream",
+            cache_intent: cacheIntent,
+            cache_preserved: hasCachedFallback,
+            cache_write_success: true,
+            finish_reason: providerDiagnostics.finish_reason,
+            received_done: providerDiagnostics.received_done,
+            time_to_first_chunk_ms: providerDiagnostics.time_to_first_chunk_ms,
+            stream_duration_ms: providerDiagnostics.stream_duration_ms,
+            first_chunk_at_ms: providerDiagnostics.first_chunk_at_ms,
+            last_chunk_at_ms: providerDiagnostics.last_chunk_at_ms,
+            streamed_chars: providerDiagnostics.streamed_chars,
+            provider_http_status: providerDiagnostics.provider_http_status
+          }
+        });
+
+        await emitStreamEvent(onEvent, "done", {
+          result: "normal_success",
+          state: readyState
+        });
+        return {
+          ok: true,
+          state: readyState
+        };
+      } catch (error) {
+        const failedAt = new Date().toISOString();
+        const storedError = normalizeStoredError(error);
+        const providerDiagnostics = getProviderDiagnostics(error);
+        const failedState = makeState(mapContextToBase(context), {
+          status: "failed",
+          error_code: storedError.error_code,
+          error_message: storedError.error_message,
+          updated_at: failedAt,
+          can_regenerate: true
+        });
+
+        if (persistInterimState) {
+          upsertSimplificationRow(database, {
+            ...createStoredRowSeed(context, currentRow, now),
+            status: "failed",
+            generated_markdown: null,
+            error_code: storedError.error_code,
+            error_message: storedError.error_message,
+            updated_at: failedAt,
+            generated_at: null
+          });
+        }
+
+        logger.warn({
+          event: "cabinet_material_simplify_stream_failed",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            mode: "stream",
+            cache_intent: cacheIntent,
+            cache_preserved: hasCachedFallback,
+            cache_write_skipped: true,
+            error_code: storedError.error_code,
+            error_stage: providerDiagnostics.stage,
+            provider_http_status: providerDiagnostics.provider_http_status,
+            provider_message: providerDiagnostics.provider_message,
+            provider_duration_ms: providerDiagnostics.provider_duration_ms,
+            response_content_type: providerDiagnostics.response_content_type,
+            response_body_length: providerDiagnostics.response_body_length,
+            abort_fired: providerDiagnostics.abort_fired,
+            finish_reason: providerDiagnostics.finish_reason,
+            received_done: providerDiagnostics.received_done,
+            time_to_first_chunk_ms: providerDiagnostics.time_to_first_chunk_ms,
+            stream_duration_ms: providerDiagnostics.stream_duration_ms,
+            first_chunk_at_ms: providerDiagnostics.first_chunk_at_ms,
+            last_chunk_at_ms: providerDiagnostics.last_chunk_at_ms,
+            streamed_chars: providerDiagnostics.streamed_chars
+          }
+        });
+
+        await emitStreamEvent(onEvent, "error", {
+          error_code: storedError.error_code,
+          error_message: storedError.error_message,
+          state: hasCachedFallback ? currentState : failedState,
+          cache_preserved: hasCachedFallback
+        });
+        return {
+          ok: true,
+          state: hasCachedFallback ? currentState : failedState
+        };
+      }
+    })().finally(() => {
+      inflightGenerations.delete(identity.key);
+    });
+
+    inflightGenerations.set(identity.key, generationPromise);
+    return generationPromise;
+  }
+
   function getSettings() {
     const settings = mapSettingsRow(readSettingsRow(database, llmConfig), llmConfig);
     return buildSettingsResult(database, settings, !!llmConfig.apiKey, llmConfig);
@@ -1288,6 +1784,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
   return {
     getSimplifyState,
     generate,
+    streamGenerate,
     getSettings,
     updateSettings,
     testConnection

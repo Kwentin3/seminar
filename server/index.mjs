@@ -580,6 +580,133 @@ app.post("/api/cabinet/materials/:slug/simplify/regenerate", async (request, res
   }
 });
 
+app.get("/api/cabinet/materials/:slug/simplify/stream", async (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-simplify-stream-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const forceRaw = readString(request.query.force);
+    const force = forceRaw === "1" || forceRaw === "true";
+    let responseClosed = false;
+    request.once("close", () => {
+      responseClosed = true;
+    });
+
+    response.status(200);
+    response.setHeader("content-type", "text/event-stream; charset=utf-8");
+    response.setHeader("cache-control", "no-store");
+    response.setHeader("connection", "keep-alive");
+    response.flushHeaders?.();
+
+    const result = await materialSimplifyService.streamGenerate(slug, {
+      force,
+      onEvent: async (event) => {
+        if (responseClosed || response.writableEnded) {
+          return;
+        }
+
+        writeSseEvent(response, event.type, event.data);
+      }
+    });
+
+    if (!result.ok) {
+      if (!responseClosed && !response.writableEnded) {
+        writeSseEvent(response, "error", {
+          error_code: result.error.body.code,
+          error_message: result.error.body.message,
+          state: null,
+          cache_preserved: false
+        });
+      }
+      logger.warn({
+        event: "cabinet_material_simplify_stream_failed",
+        domain: "cabinet",
+        module: "cabinet/material-simplify-stream-handler",
+        duration_ms: elapsedMs(startedAt),
+        payload: {
+          status_code: result.error.status,
+          slug,
+          role: cabinetSession.role,
+          force,
+          error_code: result.error.body.code
+        }
+      });
+      if (!responseClosed && !response.writableEnded) {
+        response.end();
+      }
+      return undefined;
+    }
+
+    logger.info({
+      event: "cabinet_material_simplify_stream_completed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-stream-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug,
+        role: cabinetSession.role,
+        force,
+        simplify_status: result.state.status,
+        error_code: result.state.error_code,
+        delivery_mode: result.state.delivery_mode
+      }
+    });
+
+    if (!responseClosed && !response.writableEnded) {
+      response.end();
+    }
+    return undefined;
+  } catch {
+    logger.error({
+      event: "cabinet_material_simplify_stream_failed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-stream-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug/simplify/stream"
+      },
+      error: createObsError(
+        "cabinet.material_simplify_stream_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet material simplify stream failed"
+      )
+    });
+    if (!response.headersSent) {
+      return jsonError(response, 500, {
+        code: "internal_error",
+        message: "Unexpected server error."
+      });
+    }
+
+    if (!response.writableEnded) {
+      writeSseEvent(response, "error", {
+        error_code: "internal_error",
+        error_message: "Unexpected server error.",
+        state: null,
+        cache_preserved: false
+      });
+      response.end();
+    }
+    return undefined;
+  }
+});
+
 app.get("/api/cabinet/admin/llm-simplify/settings", (request, response) => {
   const startedAt = Date.now();
 
@@ -2504,4 +2631,13 @@ function authenticateAdminRequest(request, response, startedAt, moduleName) {
 
 function jsonError(response, status, error) {
   return response.status(status).json(error);
+}
+
+function writeSseEvent(response, eventName, payload) {
+  if (response.writableEnded) {
+    return;
+  }
+
+  response.write(`event: ${eventName}\n`);
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }

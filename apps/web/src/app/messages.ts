@@ -222,6 +222,16 @@ type CabinetMessages = {
       panelHeading: string;
       loading: string;
       loadingState: string;
+      connecting: string;
+      streaming: string;
+      streamingHint: string;
+      streamPartial: string;
+      streamComplete: string;
+      streamFailed: string;
+      streamFailedHint: string;
+      streamTruncated: string;
+      streamTruncatedHint: string;
+      preservedCacheHint: string;
       idle: string;
       disabled: string;
       disabledMissingKey: string;
@@ -585,6 +595,16 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           panelHeading: "Упрощённый пересказ",
           loading: "Проверяем состояние пересказа...",
           loadingState: "Генерируем упрощённую версию...",
+          connecting: "Подключаемся к потоку генерации...",
+          streaming: "Пересказ приходит по мере генерации...",
+          streamingHint: "Можно начинать читать уже сейчас. В кэш сохранится только полностью завершённая версия.",
+          streamPartial: "Черновик потока",
+          streamComplete: "Поток завершён, сохраняем итоговую версию...",
+          streamFailed: "Поток генерации прервался до завершения.",
+          streamFailedHint: "Частичный текст не сохранён в кэш как готовая версия. Можно попробовать снова.",
+          streamTruncated: "Модель оборвала поток по лимиту длины.",
+          streamTruncatedHint: "Частичный текст не считается готовым пересказом. Увеличьте Max output tokens и перегенерируйте.",
+          preservedCacheHint: "Предыдущая сохранённая версия оставлена без изменений.",
           idle: "Пересказ ещё не создан. Нажмите кнопку, чтобы получить упрощённую версию текста.",
           disabled: "Функция временно отключена в настройках кабинета.",
           disabledMissingKey: "DeepSeek API key ещё не настроен. Обратитесь к администратору кабинета.",
@@ -940,6 +960,16 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           panelHeading: "Simplified retelling",
           loading: "Checking simplified state...",
           loadingState: "Generating simplified version...",
+          connecting: "Opening the generation stream...",
+          streaming: "The retelling is arriving progressively...",
+          streamingHint: "You can start reading already. Only a fully completed version will be saved to cache.",
+          streamPartial: "Partial stream draft",
+          streamComplete: "Stream finished, saving the final version...",
+          streamFailed: "The generation stream ended before completion.",
+          streamFailedHint: "The partial text was not saved as a ready cache entry. You can try again.",
+          streamTruncated: "The model stopped streaming because of the output length limit.",
+          streamTruncatedHint: "This partial text is not treated as a finished simplification. Increase Max output tokens and regenerate.",
+          preservedCacheHint: "The previously saved version was kept unchanged.",
           idle: "No simplified version yet. Use the action to generate one for this document.",
           disabled: "This feature is currently disabled in cabinet settings.",
           disabledMissingKey: "DeepSeek API key is not configured yet. Contact a cabinet admin.",

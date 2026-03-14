@@ -127,9 +127,11 @@ async function run() {
     if (!SKIP_SIMPLIFY) {
       await page.getByRole("button", { name: /Пересказать простым языком|Explain simply/ }).click();
       await page.getByRole("tab", { name: /Простым языком|Simplified/ }).waitFor();
+      await page.getByText(/Черновик потока|Streaming draft/).waitFor();
       await page.getByText(/Упрощённый пересказ #1/).waitFor();
-      await page.getByText(/Это упрощённый LLM-пересказ|This is an LLM-generated simplification/).waitFor();
+      await page.getByText(/Это упрощённый LLM-пересказ|This is an LLM-generated simplification/).first().waitFor();
       await page.getByRole("button", { name: /Перегенерировать|Regenerate/ }).click();
+      await page.getByText(/Короткая версия материала \(обновлено\)|Short version refreshed/).waitFor();
       await page.getByText(/Упрощённый пересказ #2/).waitFor();
       await page.getByRole("tab", { name: /Оригинал|Original/ }).click();
     }
@@ -228,8 +230,27 @@ async function startStubDeepSeek() {
     }
 
     requestCount += 1;
-    for await (const _chunk of request) {
-      // consume body
+    const bodyChunks = [];
+    for await (const chunk of request) {
+      bodyChunks.push(chunk);
+    }
+    const payload = JSON.parse(Buffer.concat(bodyChunks).toString("utf8"));
+
+    if (payload.stream === true) {
+      response.statusCode = 200;
+      response.setHeader("content-type", "text/event-stream");
+      const secondLine =
+        requestCount === 1
+          ? "Короткая версия материала для smoke."
+          : "Короткая версия материала (обновлено).";
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: requestCount === 1 ? "Черновик потока...\n\n" : "Streaming draft...\n\n" } }] })}\n\n`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `# Упрощённый пересказ #${requestCount}\n\n${secondLine}` } }] })}\n\n`);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      response.write(`data: ${JSON.stringify({ choices: [{ finish_reason: "stop" }] })}\n\n`);
+      response.write("data: [DONE]\n\n");
+      response.end();
+      return;
     }
 
     response.setHeader("content-type", "application/json");
