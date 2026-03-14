@@ -26,7 +26,8 @@ tags:
 Cabinet v1 использует:
 1. app-native login;
 2. SQLite-backed `users`, `sessions`, `materials`;
-3. env-assisted bootstrap admin flow.
+3. env-assisted bootstrap admin flow;
+4. optional DeepSeek-backed simplify flow for markdown reader materials.
 
 Runtime truth for this runbook:
 1. This document is for local `node server/index.mjs` flow only.
@@ -58,6 +59,10 @@ $env:CABINET_BOOTSTRAP_ALLOW_RESET="1" # only for an intentional one-time reset
 $env:CABINET_SESSION_TTL_HOURS="168"
 $env:CABINET_LOGIN_WINDOW_MINUTES="10"
 $env:CABINET_LOGIN_MAX_ATTEMPTS="10"
+$env:DEEPSEEK_API_KEY="local-deepseek-key"
+# $env:DEEPSEEK_BASE_URL="https://api.deepseek.com"
+# $env:LLM_SIMPLIFY_TIMEOUT_MS="45000"
+# $env:LLM_SIMPLIFY_MAX_SOURCE_CHARS="20000"
 ```
 
 ### 2. Start App
@@ -90,9 +95,11 @@ The browser smoke is self-managed by default:
 2. logs in with bootstrap admin credentials;
 3. verifies `/cabinet` access;
 4. opens one markdown material in `/cabinet/materials/:slug`;
-5. returns back to the library;
-6. performs logout;
-7. verifies that `/cabinet` requires auth again.
+5. runs simplify generation for the opened markdown material when DeepSeek env is configured;
+6. regenerates the simplified view once;
+7. returns back to the library;
+8. performs logout;
+9. verifies that `/cabinet` requires auth again.
 
 Manual fallback:
 1. Open `http://127.0.0.1:8787/cabinet`.
@@ -102,9 +109,11 @@ Manual fallback:
 5. Confirm materials list is visible.
 6. Open one markdown material with `Читать в кабинете`.
 7. Confirm the material renders as readable markdown and not as raw frontmatter.
-8. Click `Назад к библиотеке`.
-9. Click logout.
-10. Confirm return to login screen.
+8. If DeepSeek env is configured, click `Пересказать простым языком` and confirm the simplified markdown appears.
+9. Click `Перегенерировать` once and confirm the simplified view updates.
+10. Click `Назад к библиотеке`.
+11. Click logout.
+12. Confirm return to login screen.
 
 ### 5. After Bootstrap
 Once the first admin is created and verified, disable bootstrap env:
@@ -122,8 +131,9 @@ Smoke is green when:
 2. `/api/cabinet/login` returns `200` and sets `HttpOnly` cookie.
 3. `/api/cabinet/materials` returns non-empty list after login.
 4. at least one markdown material opens via `/cabinet/materials/:slug` and renders without YAML frontmatter.
-5. `/api/cabinet/logout` invalidates access.
-6. `/api/admin/leads` still returns `401` on wrong secret and `200` on valid `ADMIN_SECRET`.
+5. if DeepSeek env is configured, simplify state endpoint returns `200` and the browser smoke can complete one generate + one regenerate round-trip.
+6. `/api/cabinet/logout` invalidates access.
+7. `/api/admin/leads` still returns `401` on wrong secret and `200` on valid `ADMIN_SECRET`.
 
 ## Related
 - docs/prd/PRD-002.cabinet.materials-auth.v0.1.md

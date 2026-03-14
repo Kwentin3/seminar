@@ -65,6 +65,18 @@ async function run() {
     throw new Error(`Expected 200 for material open route, got ${openResponse.status}`);
   }
 
+  const markdownItem = materialsPayload.items.find((item) => item.reading_mode === "in_app");
+  if (markdownItem) {
+    const simplifyStateResponse = await fetch(`${BASE_URL}/api/cabinet/materials/${markdownItem.slug}/simplify`, {
+      headers: {
+        Cookie: cookie
+      }
+    });
+    if (simplifyStateResponse.status !== 200) {
+      throw new Error(`Expected 200 for simplify state route, got ${simplifyStateResponse.status}`);
+    }
+  }
+
   const logoutResponse = await fetch(`${BASE_URL}/api/cabinet/logout`, {
     method: "POST",
     headers: {

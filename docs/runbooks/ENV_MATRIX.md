@@ -31,15 +31,20 @@
    - `CABINET_SESSION_TTL_HOURS`
    - `CABINET_LOGIN_WINDOW_MINUTES`
    - `CABINET_LOGIN_MAX_ATTEMPTS`
-8. Runtime interpretation:
+8. Optional LLM simplify env:
+   - `DEEPSEEK_API_KEY` (env only; do not store in SQLite/UI)
+   - `DEEPSEEK_BASE_URL` (defaults to `https://api.deepseek.com`)
+   - `LLM_SIMPLIFY_TIMEOUT_MS` (defaults to `45000`)
+   - `LLM_SIMPLIFY_MAX_SOURCE_CHARS` (defaults to `20000`)
+9. Runtime interpretation:
    - local `node server/index.mjs` is the only expected local flow;
    - Docker + Traefik is the canonical production contour;
    - legacy `systemd + nginx` is rollback/live snapshot only and MUST NOT be treated as the default release path.
-9. Current live control plane on the VPS is Docker-native:
+10. Current live control plane on the VPS is Docker-native:
    - `/etc/seminar/seminar.docker.env`
    - `/opt/seminar/.env.seminar`
    - `/opt/seminar/compose.seminar.ghcr.yml`
-10. First cabinet go-live on a pre-cabinet production DB requires:
+11. First cabinet go-live on a pre-cabinet production DB requires:
    - temporary bootstrap envs;
    - SQLite triplet backup before rollout;
    - docker-native rollback plan using previous pinned image plus DB snapshot if needed.

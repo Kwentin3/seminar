@@ -1,6 +1,7 @@
 import process from "node:process";
 import path from "node:path";
 import os from "node:os";
+import http from "node:http";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { chromium } from "playwright";
@@ -11,7 +12,8 @@ const CABINET_LOGIN = process.env.CABINET_BOOTSTRAP_USERNAME ?? "local-admin";
 const CABINET_PASSWORD = process.env.CABINET_BOOTSTRAP_PASSWORD ?? "local-admin-pass";
 
 async function run() {
-  const managedServer = EXTERNAL_SERVER ? null : await startManagedServer();
+  const managedProvider = EXTERNAL_SERVER ? null : await startStubDeepSeek();
+  const managedServer = EXTERNAL_SERVER ? null : await startManagedServer(managedProvider);
   const browser = await chromium.launch({
     headless: process.env.PLAYWRIGHT_HEADLESS !== "0"
   });
@@ -47,14 +49,22 @@ async function run() {
     ]);
 
     await page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).waitFor();
-    await page.getByText(/Коротко о материале|Quick facts/).waitFor();
-    await page.getByText(/Контекст материала|Material context/).waitFor();
-    await page.getByText(/Проверено куратором|Curator reviewed/).first().waitFor();
-    await page.locator("article").first().waitFor();
+      await page.getByText(/Коротко о материале|Quick facts/).waitFor();
+      await page.getByText(/Контекст материала|Material context/).waitFor();
+      await page.getByText(/Проверено куратором|Curator reviewed/).first().waitFor();
+      await page.locator("article").first().waitFor();
 
-    await Promise.all([
-      page.waitForURL(/\/cabinet(?:\?|$)/),
-      page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
+      await page.getByRole("button", { name: /Пересказать простым языком|Explain simply/ }).click();
+      await page.getByRole("tab", { name: /Простым языком|Simplified/ }).waitFor();
+      await page.getByText(/Упрощённый пересказ #1/).waitFor();
+      await page.getByText(/Это упрощённый LLM-пересказ|This is an LLM-generated simplification/).waitFor();
+      await page.getByRole("button", { name: /Перегенерировать|Regenerate/ }).click();
+      await page.getByText(/Упрощённый пересказ #2/).waitFor();
+      await page.getByRole("tab", { name: /Оригинал|Original/ }).click();
+
+      await Promise.all([
+        page.waitForURL(/\/cabinet(?:\?|$)/),
+        page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
     ]);
 
     await Promise.all([
@@ -73,10 +83,13 @@ async function run() {
     if (managedServer) {
       await managedServer.stop();
     }
+    if (managedProvider) {
+      await managedProvider.stop();
+    }
   }
 }
 
-async function startManagedServer() {
+async function startManagedServer(provider) {
   const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "seminar-cabinet-browser-smoke-"));
   const databasePath = path.join(fixtureDir, "cabinet-browser.sqlite");
   const port = 19400 + Math.floor(Math.random() * 1000);
@@ -96,7 +109,9 @@ async function startManagedServer() {
       CABINET_BOOTSTRAP_PASSWORD: CABINET_PASSWORD,
       TURNSTILE_MODE: "mock",
       ALLOW_TURNSTILE_MOCK: "1",
-      TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY ?? "dummy"
+      TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY ?? "dummy",
+      DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? "browser-smoke-deepseek-key",
+      DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL ?? provider?.baseUrl
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -127,6 +142,50 @@ async function startManagedServer() {
         });
       }
       await rm(fixtureDir, { recursive: true, force: true });
+    }
+  };
+}
+
+async function startStubDeepSeek() {
+  let requestCount = 0;
+  const server = http.createServer(async (request, response) => {
+    if (request.method !== "POST" || request.url !== "/chat/completions") {
+      response.statusCode = 404;
+      response.end("not found");
+      return;
+    }
+
+    requestCount += 1;
+    for await (const _chunk of request) {
+      // consume body
+    }
+
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: `# Упрощённый пересказ #${requestCount}\n\nКороткая версия материала для smoke.`
+            }
+          }
+        ]
+      })
+    );
+  });
+
+  await new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    async stop() {
+      await new Promise((resolve) => {
+        server.close(resolve);
+      });
     }
   };
 }

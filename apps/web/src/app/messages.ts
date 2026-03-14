@@ -172,6 +172,7 @@ type CabinetMessages = {
     recommendedForPrep: string;
     signedInAs: string;
     adminStats: string;
+    llmSettings: string;
     errors: {
       generic: string;
     };
@@ -213,6 +214,63 @@ type CabinetMessages = {
       draft: string;
     };
     recommendedForPrep: string;
+    simplify: {
+      action: string;
+      originalTab: string;
+      simplifiedTab: string;
+      panelHeading: string;
+      loading: string;
+      loadingState: string;
+      idle: string;
+      disabled: string;
+      disabledMissingKey: string;
+      stale: string;
+      staleBadge: string;
+      failed: string;
+      failedBadge: string;
+      fromCache: string;
+      generatedNow: string;
+      generating: string;
+      disabledBadge: string;
+      generatedAt: string;
+      regenerate: string;
+      regenerating: string;
+      refreshStale: string;
+      retry: string;
+      disclaimer: string;
+      unavailable: string;
+    };
+  };
+  llmSettings: {
+    heading: string;
+    description: string;
+    loading: string;
+    forbidden: string;
+    error: string;
+    backToLibrary: string;
+    keyConfigured: string;
+    keyMissing: string;
+    promptVersion: string;
+    updatedAt: string;
+    updatedBy: string;
+    featureToggle: string;
+    featureHint: string;
+    modelLabel: string;
+    temperatureLabel: string;
+    maxTokensLabel: string;
+    optionalPlaceholder: string;
+    promptLabel: string;
+    saveIdle: string;
+    saveLoading: string;
+    saveSuccess: string;
+    testIdle: string;
+    testLoading: string;
+    connection: {
+      idle: string;
+      success: string;
+      missingKey: string;
+      failed: string;
+    };
   };
 };
 
@@ -398,6 +456,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         recommendedForPrep: "Рекомендуем для подготовки",
         signedInAs: "Вы вошли как",
         adminStats: "Материалов: {count}. Категории: {categories}.",
+        llmSettings: "LLM-настройки",
         errors: {
           generic: "Не удалось загрузить библиотеку материалов."
         }
@@ -438,7 +497,64 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           working: "Рабочая версия: полезно читать для подготовки.",
           draft: "Дополнительный контекст, а не главная опора."
         },
-        recommendedForPrep: "Рекомендуем для подготовки"
+        recommendedForPrep: "Рекомендуем для подготовки",
+        simplify: {
+          action: "Пересказать простым языком",
+          originalTab: "Оригинал",
+          simplifiedTab: "Простым языком",
+          panelHeading: "Упрощённый пересказ",
+          loading: "Проверяем состояние пересказа...",
+          loadingState: "Генерируем упрощённую версию...",
+          idle: "Пересказ ещё не создан. Нажмите кнопку, чтобы получить упрощённую версию текста.",
+          disabled: "Функция временно отключена в настройках кабинета.",
+          disabledMissingKey: "DeepSeek API key ещё не настроен. Обратитесь к администратору кабинета.",
+          stale: "Доступна устаревшая версия пересказа. Можно обновить её повторной генерацией.",
+          staleBadge: "Устарело",
+          failed: "Не удалось получить упрощённую версию.",
+          failedBadge: "Ошибка",
+          fromCache: "Из кэша",
+          generatedNow: "Сгенерировано",
+          generating: "Генерируется",
+          disabledBadge: "Недоступно",
+          generatedAt: "Сгенерировано: {value}",
+          regenerate: "Перегенерировать",
+          regenerating: "Перегенерируем...",
+          refreshStale: "Обновить пересказ",
+          retry: "Попробовать снова",
+          disclaimer: "Это упрощённый LLM-пересказ. Для точных формулировок сверяйтесь с оригиналом.",
+          unavailable: "Упрощённая версия сейчас недоступна."
+        }
+      },
+      llmSettings: {
+        heading: "LLM-настройки reader-а",
+        description: "Минимальная admin-панель для prompt/model настроек и проверки связи с DeepSeek.",
+        loading: "Загружаем настройки LLM...",
+        forbidden: "Эта страница доступна только администратору кабинета.",
+        error: "Не удалось загрузить или сохранить настройки LLM.",
+        backToLibrary: "Назад к библиотеке",
+        keyConfigured: "API key настроен",
+        keyMissing: "API key не настроен",
+        promptVersion: "Версия промта: {value}",
+        updatedAt: "Обновлено: {value}",
+        updatedBy: "Кем: {value}",
+        featureToggle: "Включить reader-пересказ",
+        featureHint: "Если опция выключена, кнопка пересказа останется недоступной даже при настроенном ключе.",
+        modelLabel: "Модель",
+        temperatureLabel: "Temperature",
+        maxTokensLabel: "Max output tokens",
+        optionalPlaceholder: "Необязательно",
+        promptLabel: "Системный промт пересказа",
+        saveIdle: "Сохранить настройки",
+        saveLoading: "Сохраняем...",
+        saveSuccess: "Настройки сохранены.",
+        testIdle: "Проверить связь с LLM",
+        testLoading: "Проверяем...",
+        connection: {
+          idle: "Можно выполнить test connection перед релизом.",
+          success: "Связь с LLM подтверждена",
+          missingKey: "Проверка недоступна: API key не настроен.",
+          failed: "Проверка связи завершилась ошибкой"
+        }
       }
     }
   },
@@ -616,6 +732,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         recommendedForPrep: "Recommended for lecture prep",
         signedInAs: "Signed in as",
         adminStats: "Materials: {count}. Categories: {categories}.",
+        llmSettings: "LLM settings",
         errors: {
           generic: "Unable to load the materials library."
         }
@@ -656,7 +773,64 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           working: "Working version: useful for lecture prep.",
           draft: "Supporting context rather than the main anchor."
         },
-        recommendedForPrep: "Recommended for lecture prep"
+        recommendedForPrep: "Recommended for lecture prep",
+        simplify: {
+          action: "Explain simply",
+          originalTab: "Original",
+          simplifiedTab: "Simplified",
+          panelHeading: "Simplified retelling",
+          loading: "Checking simplified state...",
+          loadingState: "Generating simplified version...",
+          idle: "No simplified version yet. Use the action to generate one for this document.",
+          disabled: "This feature is currently disabled in cabinet settings.",
+          disabledMissingKey: "DeepSeek API key is not configured yet. Contact a cabinet admin.",
+          stale: "A stale simplified version is available. You can refresh it with regeneration.",
+          staleBadge: "Stale",
+          failed: "Unable to generate the simplified version.",
+          failedBadge: "Error",
+          fromCache: "From cache",
+          generatedNow: "Generated",
+          generating: "Generating",
+          disabledBadge: "Unavailable",
+          generatedAt: "Generated: {value}",
+          regenerate: "Regenerate",
+          regenerating: "Regenerating...",
+          refreshStale: "Refresh simplified view",
+          retry: "Try again",
+          disclaimer: "This is an LLM-generated simplification. Check the original for precise wording.",
+          unavailable: "Simplified view is unavailable right now."
+        }
+      },
+      llmSettings: {
+        heading: "Reader LLM settings",
+        description: "Minimal admin panel for prompt/model settings and DeepSeek connection checks.",
+        loading: "Loading LLM settings...",
+        forbidden: "This page is available only to cabinet admins.",
+        error: "Unable to load or save LLM settings.",
+        backToLibrary: "Back to library",
+        keyConfigured: "API key configured",
+        keyMissing: "API key missing",
+        promptVersion: "Prompt version: {value}",
+        updatedAt: "Updated: {value}",
+        updatedBy: "By: {value}",
+        featureToggle: "Enable simplified reader mode",
+        featureHint: "When disabled, the simplify action stays unavailable even if a key is configured.",
+        modelLabel: "Model",
+        temperatureLabel: "Temperature",
+        maxTokensLabel: "Max output tokens",
+        optionalPlaceholder: "Optional",
+        promptLabel: "Simplify system prompt",
+        saveIdle: "Save settings",
+        saveLoading: "Saving...",
+        saveSuccess: "Settings saved.",
+        testIdle: "Test LLM connection",
+        testLoading: "Testing...",
+        connection: {
+          idle: "Run a connection check before rollout.",
+          success: "LLM connection confirmed",
+          missingKey: "Connection test unavailable: API key is missing.",
+          failed: "Connection test failed"
+        }
       }
     }
   }

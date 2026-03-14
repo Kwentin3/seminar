@@ -37,9 +37,11 @@ export const adminUnauthorizedErrorCode = "admin_unauthorized" as const;
 export const cabinetUnauthorizedErrorCode = "cabinet_unauthorized" as const;
 export const cabinetInvalidCredentialsErrorCode = "cabinet_invalid_credentials" as const;
 export const cabinetRateLimitedErrorCode = "cabinet_rate_limited" as const;
+export const cabinetForbiddenErrorCode = "cabinet_forbidden" as const;
 
 export const apiErrorCodeSchema = z.enum([
   adminUnauthorizedErrorCode,
+  cabinetForbiddenErrorCode,
   cabinetInvalidCredentialsErrorCode,
   cabinetRateLimitedErrorCode,
   cabinetUnauthorizedErrorCode,
@@ -184,5 +186,84 @@ export const cabinetMaterialDetailResponseSchema = z.object({
   })
 });
 export type CabinetMaterialDetailResponse = z.infer<typeof cabinetMaterialDetailResponseSchema>;
+
+export const cabinetMaterialSimplifyStatusSchema = z.enum(["idle", "generating", "ready", "stale", "failed", "disabled"]);
+export type CabinetMaterialSimplifyStatus = z.infer<typeof cabinetMaterialSimplifyStatusSchema>;
+
+export const cabinetMaterialSimplifyDisabledReasonSchema = z.enum(["feature_disabled", "key_missing"]);
+export type CabinetMaterialSimplifyDisabledReason = z.infer<typeof cabinetMaterialSimplifyDisabledReasonSchema>;
+
+export const cabinetMaterialSimplifyDeliveryModeSchema = z.enum(["cache", "generated"]);
+export type CabinetMaterialSimplifyDeliveryMode = z.infer<typeof cabinetMaterialSimplifyDeliveryModeSchema>;
+
+export const cabinetMaterialSimplifyStateSchema = z.object({
+  feature_enabled: z.boolean(),
+  key_configured: z.boolean(),
+  provider: z.string().min(1),
+  model: z.string().min(1).nullable(),
+  prompt_version: z.string().min(1).nullable(),
+  status: cabinetMaterialSimplifyStatusSchema,
+  disabled_reason: cabinetMaterialSimplifyDisabledReasonSchema.nullable(),
+  delivery_mode: cabinetMaterialSimplifyDeliveryModeSchema.nullable(),
+  content: z.string().min(1).nullable(),
+  generated_at: z.string().min(1).nullable(),
+  updated_at: z.string().min(1).nullable(),
+  error_code: z.string().min(1).nullable(),
+  error_message: z.string().min(1).nullable(),
+  source_updated_at_snapshot: z.string().min(1).nullable(),
+  can_generate: z.boolean(),
+  can_regenerate: z.boolean()
+});
+export type CabinetMaterialSimplifyState = z.infer<typeof cabinetMaterialSimplifyStateSchema>;
+
+export const cabinetMaterialSimplifyResponseSchema = z.object({
+  ok: z.literal(true),
+  state: cabinetMaterialSimplifyStateSchema
+});
+export type CabinetMaterialSimplifyResponse = z.infer<typeof cabinetMaterialSimplifyResponseSchema>;
+
+export const cabinetLlmProviderSchema = z.literal("deepseek");
+export type CabinetLlmProvider = z.infer<typeof cabinetLlmProviderSchema>;
+
+export const cabinetLlmSimplifySettingsSchema = z.object({
+  feature_enabled: z.boolean(),
+  provider: cabinetLlmProviderSchema,
+  model: z.string().min(1),
+  system_prompt: z.string().min(1),
+  prompt_version: z.string().min(1),
+  temperature: z.number().finite().nullable(),
+  max_output_tokens: z.number().int().positive().nullable(),
+  updated_at: z.string().min(1),
+  updated_by_username: z.string().min(1).nullable()
+});
+export type CabinetLlmSimplifySettings = z.infer<typeof cabinetLlmSimplifySettingsSchema>;
+
+export const cabinetLlmSimplifySettingsResponseSchema = z.object({
+  ok: z.literal(true),
+  key_configured: z.boolean(),
+  settings: cabinetLlmSimplifySettingsSchema
+});
+export type CabinetLlmSimplifySettingsResponse = z.infer<typeof cabinetLlmSimplifySettingsResponseSchema>;
+
+export const updateCabinetLlmSimplifySettingsRequestSchema = z.object({
+  feature_enabled: z.boolean(),
+  model: z.string().trim().min(1).max(120),
+  system_prompt: z.string().trim().min(1).max(20_000),
+  temperature: z.number().finite().nullable(),
+  max_output_tokens: z.number().int().positive().nullable()
+});
+export type UpdateCabinetLlmSimplifySettingsRequest = z.infer<typeof updateCabinetLlmSimplifySettingsRequestSchema>;
+
+export const cabinetLlmSimplifyConnectionTestResponseSchema = z.object({
+  ok: z.literal(true),
+  status: z.enum(["success", "missing_key", "failed"]),
+  key_configured: z.boolean(),
+  provider: cabinetLlmProviderSchema,
+  model: z.string().min(1),
+  error_code: z.string().min(1).nullable(),
+  error_message: z.string().min(1).nullable(),
+  tested_at: z.string().min(1)
+});
+export type CabinetLlmSimplifyConnectionTestResponse = z.infer<typeof cabinetLlmSimplifyConnectionTestResponseSchema>;
 
 export * from "./landing-content.js";

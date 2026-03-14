@@ -44,6 +44,15 @@ CABINET_BOOTSTRAP_EMAIL=local-admin@example.com
 CABINET_BOOTSTRAP_PASSWORD=local-admin-pass
 ```
 
+Optional simplify env:
+
+```bash
+DEEPSEEK_API_KEY=replace_with_deepseek_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+LLM_SIMPLIFY_TIMEOUT_MS=45000
+LLM_SIMPLIFY_MAX_SOURCE_CHARS=20000
+```
+
 Bootstrap behavior:
 - `CABINET_BOOTSTRAP_ADMIN=1` creates the first admin if it does not exist yet.
 - Existing admin credentials are reset only when `CABINET_BOOTSTRAP_ALLOW_RESET=1` is added for that specific startup.
@@ -61,6 +70,8 @@ pnpm run test:smoke:cabinet:browser
 Cabinet reader flow:
 - `/cabinet` is the protected library.
 - Markdown materials can be opened in-app via `/cabinet/materials/:slug`.
+- Markdown reader now supports `Original / Simplified` mode with server-side DeepSeek generation and SQLite cache.
+- Admin-role users can manage non-secret simplify settings at `/cabinet/admin/llm-simplify`.
 - PDFs and other non-markdown assets still open through the source/open route.
 - Materials now expose lecturer-facing curation signals: `draft`, `working`, `final`, theme, reading mode, lecture-prep recommendation, and curator review date.
 

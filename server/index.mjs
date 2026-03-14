@@ -20,8 +20,11 @@ import {
   serializeSessionCookie
 } from "./cabinet/auth.mjs";
 import { readCabinetConfig } from "./cabinet/config.mjs";
+import { createMaterialSimplifyService } from "./cabinet/material-simplify.mjs";
 import { syncMaterialsFromRegistry } from "./cabinet/materials-registry.mjs";
 import { hashPassword, verifyPasswordWithFallback } from "./cabinet/passwords.mjs";
+import { readLlmSimplifyConfig } from "./llm/config.mjs";
+import { createDeepSeekClient } from "./llm/deepseek-client.mjs";
 // DO NOT use console.log for runtime events.
 // Use server/obs/logger.mjs instead (CONTRACT-OBS-001).
 import { logger } from "./obs/logger.mjs";
@@ -62,6 +65,7 @@ const adminSecret = readString(process.env.ADMIN_SECRET);
 const turnstileMode = readString(process.env.TURNSTILE_MODE) === "mock" ? "mock" : "real";
 const allowTurnstileMock = process.env.ALLOW_TURNSTILE_MOCK === "1";
 const cabinetConfig = readCabinetConfig(process.env);
+const llmSimplifyConfig = readLlmSimplifyConfig(process.env);
 
 if (!existsSync(staticDir)) {
   throw new Error(`Static directory does not exist: ${staticDir}. Run "pnpm run build:web" first.`);
@@ -76,6 +80,13 @@ const materialSyncSummary = syncMaterialsFromRegistry(db, repoRoot);
 // cabinet admin. Do not leave reset-enabled bootstrap envs in long-lived production.
 const bootstrapAdminSummary = ensureBootstrapAdmin(db, cabinetConfig);
 const cabinetAuthState = createCabinetAuthState();
+const llmClient = createDeepSeekClient(llmSimplifyConfig);
+const materialSimplifyService = createMaterialSimplifyService({
+  database: db,
+  repoRoot,
+  llmConfig: llmSimplifyConfig,
+  client: llmClient
+});
 
 const app = express();
 app.set("trust proxy", true);
@@ -356,6 +367,349 @@ app.get("/api/cabinet/materials/:slug", (request, response) => {
         endpoint: "/api/cabinet/materials/:slug"
       },
       error: createObsError("cabinet.material_read_failed", "internal", true, "infra", "cabinet material detail failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/materials/:slug/simplify", async (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-simplify-state-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const result = materialSimplifyService.getSimplifyState(slug);
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_material_simplify_completed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-state-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug,
+        role: cabinetSession.role,
+        simplify_status: result.state.status
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      state: result.state
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_material_simplify_failed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-state-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug/simplify"
+      },
+      error: createObsError(
+        "cabinet.material_simplify_state_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet material simplify state failed"
+      )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/materials/:slug/simplify", async (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-simplify-generate-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const force = request.body?.force === true;
+    const result = await materialSimplifyService.generate(slug, { force });
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_material_simplify_completed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-generate-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug,
+        role: cabinetSession.role,
+        simplify_status: result.state.status,
+        force
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      state: result.state
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_material_simplify_failed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-generate-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug/simplify"
+      },
+      error: createObsError(
+        "cabinet.material_simplify_generate_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet material simplify generate failed"
+      )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/materials/:slug/simplify/regenerate", async (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const cabinetSession = requireCabinetSession(request, response, startedAt, "cabinet/material-simplify-regenerate-handler");
+    if (!cabinetSession) {
+      return undefined;
+    }
+
+    const slug = readString(request.params.slug);
+    if (!slug) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "Material slug is required."
+      });
+    }
+
+    const result = await materialSimplifyService.generate(slug, { force: true });
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_material_simplify_completed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-regenerate-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        slug,
+        role: cabinetSession.role,
+        simplify_status: result.state.status,
+        force: true
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      state: result.state
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_material_simplify_failed",
+      domain: "cabinet",
+      module: "cabinet/material-simplify-regenerate-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/materials/:slug/simplify/regenerate"
+      },
+      error: createObsError(
+        "cabinet.material_simplify_regenerate_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet material simplify regenerate failed"
+      )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/admin/llm-simplify/settings", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/llm-settings-read-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const result = materialSimplifyService.getSettings();
+    logger.info({
+      event: "cabinet_llm_settings_read_completed",
+      domain: "cabinet",
+      module: "cabinet/llm-settings-read-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      key_configured: result.key_configured,
+      settings: result.settings
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_llm_settings_failed",
+      domain: "cabinet",
+      module: "cabinet/llm-settings-read-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/llm-simplify/settings"
+      },
+      error: createObsError("cabinet.llm_settings_read_failed", "internal", true, "infra", "cabinet llm settings read failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.put("/api/cabinet/admin/llm-simplify/settings", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/llm-settings-update-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const result = materialSimplifyService.updateSettings(request.body ?? {}, adminSession.userId);
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_llm_settings_update_completed",
+      domain: "cabinet",
+      module: "cabinet/llm-settings-update-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      key_configured: result.key_configured,
+      settings: result.settings
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_llm_settings_failed",
+      domain: "cabinet",
+      module: "cabinet/llm-settings-update-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/llm-simplify/settings"
+      },
+      error: createObsError(
+        "cabinet.llm_settings_update_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet llm settings update failed"
+      )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/admin/llm-simplify/test-connection", async (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/llm-test-connection-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const result = await materialSimplifyService.testConnection();
+    logger.info({
+      event: "cabinet_llm_connection_test_completed",
+      domain: "cabinet",
+      module: "cabinet/llm-test-connection-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role,
+        connection_status: result.status
+      }
+    });
+
+    return response.status(200).json(result);
+  } catch {
+    logger.error({
+      event: "cabinet_llm_settings_failed",
+      domain: "cabinet",
+      module: "cabinet/llm-test-connection-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/llm-simplify/test-connection"
+      },
+      error: createObsError(
+        "cabinet.llm_connection_test_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet llm connection test failed"
+      )
     });
     return jsonError(response, 500, {
       code: "internal_error",
@@ -1048,6 +1402,24 @@ app.listen(port, host, () => {
       )
     });
   }
+  if (!llmSimplifyConfig.apiKey) {
+    logger.warn({
+      event: "runtime_dependency_failed",
+      domain: "runtime",
+      module: "runtime/server-bootstrap",
+      payload: {
+        dependency: "deepseek_api_key",
+        reason: "missing_api_key"
+      },
+      error: createObsError(
+        "runtime.deepseek_api_key_missing",
+        "dependency",
+        true,
+        "infra",
+        "deepseek api key is not configured"
+      )
+    });
+  }
 });
 
 function openDatabase(filePath) {
@@ -1263,6 +1635,35 @@ function requireCabinetSession(request, response, startedAt, moduleName) {
   jsonError(response, 401, {
     code: "cabinet_unauthorized",
     message: "Требуется вход в кабинет."
+  });
+  return null;
+}
+
+function requireCabinetAdmin(request, response, startedAt, moduleName) {
+  const cabinetSession = requireCabinetSession(request, response, startedAt, moduleName);
+  if (!cabinetSession) {
+    return null;
+  }
+
+  if (cabinetSession.role === "admin") {
+    return cabinetSession;
+  }
+
+  logger.warn({
+    event: "cabinet_access_denied",
+    domain: "cabinet",
+    module: moduleName,
+    duration_ms: elapsedMs(startedAt),
+    payload: {
+      endpoint: request.path,
+      status_code: 403,
+      role: cabinetSession.role
+    },
+    error: createObsError("cabinet.forbidden", "validation", false, "domain", "forbidden cabinet admin request")
+  });
+  jsonError(response, 403, {
+    code: "cabinet_forbidden",
+    message: "Недостаточно прав для этого действия."
   });
   return null;
 }

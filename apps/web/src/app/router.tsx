@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "../layout/AppLayout";
 import { AdminPage } from "../routes/AdminPage";
+import { CabinetLlmSettingsPage } from "../routes/CabinetLlmSettingsPage";
 import { CabinetLoginPage } from "../routes/CabinetLoginPage";
 import { CabinetMaterialPage } from "../routes/CabinetMaterialPage";
 import { CabinetPage } from "../routes/CabinetPage";
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: "cabinet/materials/:slug",
         element: <CabinetMaterialPage />
+      },
+      {
+        path: "cabinet/admin/llm-simplify",
+        element: <CabinetLlmSettingsPage />
       }
     ]
   }
