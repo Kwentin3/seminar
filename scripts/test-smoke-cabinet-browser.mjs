@@ -42,6 +42,17 @@ async function run() {
     await page.locator("article").first().getByText(/Опорный|Anchor/).first().waitFor();
     await page.locator("article").first().getByText(/Проверено куратором|Curator reviewed/).waitFor();
     await page.getByRole("link", { name: /Читать в кабинете|Read in cabinet/ }).first().waitFor();
+    await page.getByRole("link", { name: /Пользователи|Users/ }).click();
+    await page.waitForURL(/\/cabinet\/admin\/users$/);
+    await page.getByRole("heading", { name: /Пользователи кабинета|Cabinet users/ }).waitFor();
+    await page.getByRole("button", { name: /Создать lecturer|Create lecturer/ }).waitFor();
+
+    await Promise.all([
+      page.waitForURL(/\/cabinet(?:\?|$)/),
+      page.getByRole("link", { name: /Назад к библиотеке|Back to library/ }).click()
+    ]);
+
+    await page.getByRole("heading", { name: /Библиотека материалов|Materials library/ }).waitFor();
 
     await Promise.all([
       page.waitForURL(/\/cabinet\/materials\/[^/]+$/),

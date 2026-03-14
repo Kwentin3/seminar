@@ -5,6 +5,7 @@ import { CabinetLlmSettingsPage } from "../routes/CabinetLlmSettingsPage";
 import { CabinetLoginPage } from "../routes/CabinetLoginPage";
 import { CabinetMaterialPage } from "../routes/CabinetMaterialPage";
 import { CabinetPage } from "../routes/CabinetPage";
+import { CabinetUserAdminPage } from "../routes/CabinetUserAdminPage";
 import { LandingPage } from "../routes/LandingPage";
 
 export const router = createBrowserRouter([
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: "cabinet/admin/llm-simplify",
         element: <CabinetLlmSettingsPage />
+      },
+      {
+        path: "cabinet/admin/users",
+        element: <CabinetUserAdminPage />
       }
     ]
   }

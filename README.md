@@ -72,6 +72,7 @@ Cabinet reader flow:
 - `/cabinet` is the protected library.
 - Markdown materials can be opened in-app via `/cabinet/materials/:slug`.
 - Markdown reader now supports `Original / Simplified` mode with server-side DeepSeek generation and SQLite cache.
+- Admin-role users can manage lecturer/viewer access at `/cabinet/admin/users`.
 - Admin-role users can manage non-secret simplify settings at `/cabinet/admin/llm-simplify`.
 - PDFs and other non-markdown assets still open through the source/open route.
 - Materials now expose lecturer-facing curation signals: `draft`, `working`, `final`, theme, reading mode, lecture-prep recommendation, and curator review date.

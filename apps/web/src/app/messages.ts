@@ -173,6 +173,7 @@ type CabinetMessages = {
     signedInAs: string;
     adminStats: string;
     llmSettings: string;
+    userAdmin: string;
     errors: {
       generic: string;
     };
@@ -273,6 +274,47 @@ type CabinetMessages = {
       missingKey: string;
       failed: string;
     };
+  };
+  userAdmin: {
+    heading: string;
+    description: string;
+    loading: string;
+    forbidden: string;
+    error: string;
+    backToLibrary: string;
+    openLlmSettings: string;
+    createHeading: string;
+    createDescription: string;
+    createUsernameLabel: string;
+    createEmailLabel: string;
+    createPasswordLabel: string;
+    createSubmitIdle: string;
+    createSubmitLoading: string;
+    createSuccess: string;
+    empty: string;
+    tableCaption: string;
+    columns: {
+      user: string;
+      role: string;
+      status: string;
+      lastLogin: string;
+      updated: string;
+      actions: string;
+    };
+    roleViewer: string;
+    roleAdmin: string;
+    active: string;
+    inactive: string;
+    neverLoggedIn: string;
+    resetPasswordLabel: string;
+    resetPasswordHint: string;
+    resetPasswordIdle: string;
+    resetPasswordLoading: string;
+    resetPasswordSuccess: string;
+    deactivateIdle: string;
+    activateIdle: string;
+    toggleLoading: string;
+    selfDeactivateBlocked: string;
   };
 };
 
@@ -459,6 +501,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         signedInAs: "Вы вошли как",
         adminStats: "Материалов: {count}. Категории: {categories}.",
         llmSettings: "LLM-настройки",
+        userAdmin: "Пользователи",
         errors: {
           generic: "Не удалось загрузить библиотеку материалов."
         }
@@ -559,6 +602,47 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           missingKey: "Проверка недоступна: API key не настроен.",
           failed: "Проверка связи завершилась ошибкой"
         }
+      },
+      userAdmin: {
+        heading: "Пользователи кабинета",
+        description: "Минимальная admin-панель для создания lecturer/viewer аккаунтов и безопасного управления доступом.",
+        loading: "Загружаем пользователей кабинета...",
+        forbidden: "Эта страница доступна только администратору кабинета.",
+        error: "Не удалось загрузить или изменить пользователей кабинета.",
+        backToLibrary: "Назад к библиотеке",
+        openLlmSettings: "К LLM-настройкам",
+        createHeading: "Добавить лектора",
+        createDescription: "Создаёт новый cabinet-аккаунт с ролью viewer.",
+        createUsernameLabel: "Username",
+        createEmailLabel: "Email",
+        createPasswordLabel: "Пароль",
+        createSubmitIdle: "Создать lecturer",
+        createSubmitLoading: "Создаём...",
+        createSuccess: "Пользователь создан.",
+        empty: "Пользователи пока не найдены.",
+        tableCaption: "Список пользователей кабинета",
+        columns: {
+          user: "Пользователь",
+          role: "Роль",
+          status: "Статус",
+          lastLogin: "Последний вход",
+          updated: "Обновлено",
+          actions: "Действия"
+        },
+        roleViewer: "Lecturer / viewer",
+        roleAdmin: "Admin",
+        active: "Активен",
+        inactive: "Отключён",
+        neverLoggedIn: "ещё не входил",
+        resetPasswordLabel: "Новый пароль",
+        resetPasswordHint: "После сброса текущие сессии пользователя будут завершены.",
+        resetPasswordIdle: "Сменить пароль",
+        resetPasswordLoading: "Обновляем пароль...",
+        resetPasswordSuccess: "Пароль обновлён.",
+        deactivateIdle: "Отключить",
+        activateIdle: "Включить",
+        toggleLoading: "Сохраняем...",
+        selfDeactivateBlocked: "Свой аккаунт отключить нельзя."
       }
     }
   },
@@ -737,6 +821,7 @@ export const MESSAGES: Record<Locale, AppMessages> = {
         signedInAs: "Signed in as",
         adminStats: "Materials: {count}. Categories: {categories}.",
         llmSettings: "LLM settings",
+        userAdmin: "Users",
         errors: {
           generic: "Unable to load the materials library."
         }
@@ -837,6 +922,47 @@ export const MESSAGES: Record<Locale, AppMessages> = {
           missingKey: "Connection test unavailable: API key is missing.",
           failed: "Connection test failed"
         }
+      },
+      userAdmin: {
+        heading: "Cabinet users",
+        description: "Minimal admin panel for creating lecturer/viewer accounts and managing access safely.",
+        loading: "Loading cabinet users...",
+        forbidden: "This page is available only to cabinet admins.",
+        error: "Unable to load or update cabinet users.",
+        backToLibrary: "Back to library",
+        openLlmSettings: "Open LLM settings",
+        createHeading: "Add lecturer",
+        createDescription: "Creates a new cabinet account with the viewer role.",
+        createUsernameLabel: "Username",
+        createEmailLabel: "Email",
+        createPasswordLabel: "Password",
+        createSubmitIdle: "Create lecturer",
+        createSubmitLoading: "Creating...",
+        createSuccess: "User created.",
+        empty: "No cabinet users found yet.",
+        tableCaption: "Cabinet users list",
+        columns: {
+          user: "User",
+          role: "Role",
+          status: "Status",
+          lastLogin: "Last login",
+          updated: "Updated",
+          actions: "Actions"
+        },
+        roleViewer: "Lecturer / viewer",
+        roleAdmin: "Admin",
+        active: "Active",
+        inactive: "Inactive",
+        neverLoggedIn: "never logged in",
+        resetPasswordLabel: "New password",
+        resetPasswordHint: "Password reset invalidates the user's current sessions.",
+        resetPasswordIdle: "Reset password",
+        resetPasswordLoading: "Updating password...",
+        resetPasswordSuccess: "Password updated.",
+        deactivateIdle: "Deactivate",
+        activateIdle: "Activate",
+        toggleLoading: "Saving...",
+        selfDeactivateBlocked: "You cannot deactivate your own account."
       }
     }
   }

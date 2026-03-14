@@ -110,6 +110,14 @@ export const cabinetUserSchema = z.object({
 });
 export type CabinetUser = z.infer<typeof cabinetUserSchema>;
 
+export const cabinetAdminUserSchema = cabinetUserSchema.extend({
+  is_active: z.boolean(),
+  created_at: z.string().min(1),
+  updated_at: z.string().min(1),
+  last_login_at: z.string().min(1).nullable()
+});
+export type CabinetAdminUser = z.infer<typeof cabinetAdminUserSchema>;
+
 export const cabinetLoginRequestSchema = z.object({
   login: z.string().trim().min(1).max(120),
   password: z.string().min(1).max(256)
@@ -267,5 +275,34 @@ export const cabinetLlmSimplifyConnectionTestResponseSchema = z.object({
   tested_at: z.string().min(1)
 });
 export type CabinetLlmSimplifyConnectionTestResponse = z.infer<typeof cabinetLlmSimplifyConnectionTestResponseSchema>;
+
+export const cabinetAdminUsersResponseSchema = z.object({
+  ok: z.literal(true),
+  items: z.array(cabinetAdminUserSchema)
+});
+export type CabinetAdminUsersResponse = z.infer<typeof cabinetAdminUsersResponseSchema>;
+
+export const createCabinetAdminViewerRequestSchema = z.object({
+  username: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(320),
+  password: z.string().min(8).max(256)
+});
+export type CreateCabinetAdminViewerRequest = z.infer<typeof createCabinetAdminViewerRequestSchema>;
+
+export const resetCabinetAdminUserPasswordRequestSchema = z.object({
+  password: z.string().min(8).max(256)
+});
+export type ResetCabinetAdminUserPasswordRequest = z.infer<typeof resetCabinetAdminUserPasswordRequestSchema>;
+
+export const setCabinetAdminUserActiveRequestSchema = z.object({
+  is_active: z.boolean()
+});
+export type SetCabinetAdminUserActiveRequest = z.infer<typeof setCabinetAdminUserActiveRequestSchema>;
+
+export const cabinetAdminUserMutationResponseSchema = z.object({
+  ok: z.literal(true),
+  item: cabinetAdminUserSchema
+});
+export type CabinetAdminUserMutationResponse = z.infer<typeof cabinetAdminUserMutationResponseSchema>;
 
 export * from "./landing-content.js";

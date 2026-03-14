@@ -41,6 +41,7 @@ async function run() {
   if (sessionResponse.status !== 200) {
     throw new Error(`Expected 200 for cabinet session, got ${sessionResponse.status}`);
   }
+  const sessionPayload = await sessionResponse.json();
 
   const materialsResponse = await fetch(`${BASE_URL}/api/cabinet/materials`, {
     headers: {
@@ -53,6 +54,17 @@ async function run() {
   const materialsPayload = await materialsResponse.json();
   if (!Array.isArray(materialsPayload.items) || materialsPayload.items.length === 0) {
     throw new Error("Cabinet materials response is empty.");
+  }
+
+  if (sessionPayload.user?.role === "admin") {
+    const adminUsersResponse = await fetch(`${BASE_URL}/api/cabinet/admin/users`, {
+      headers: {
+        Cookie: cookie
+      }
+    });
+    if (adminUsersResponse.status !== 200) {
+      throw new Error(`Expected 200 for cabinet admin users route, got ${adminUsersResponse.status}`);
+    }
   }
 
   const firstMaterial = materialsPayload.items[0];

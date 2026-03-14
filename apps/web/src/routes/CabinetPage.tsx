@@ -202,12 +202,20 @@ export function CabinetPage() {
               {messages.cabinet.library.helpfulForLecturer}
             </p>
             {user?.role === "admin" ? (
-              <Link
-                to="/cabinet/admin/llm-simplify"
-                className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-sky-900"
-              >
-                {messages.cabinet.library.llmSettings}
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/cabinet/admin/users"
+                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-sky-900"
+                >
+                  {messages.cabinet.library.userAdmin}
+                </Link>
+                <Link
+                  to="/cabinet/admin/llm-simplify"
+                  className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-sky-900"
+                >
+                  {messages.cabinet.library.llmSettings}
+                </Link>
+              </div>
             ) : null}
           </div>
 

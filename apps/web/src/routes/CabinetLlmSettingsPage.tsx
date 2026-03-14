@@ -318,6 +318,12 @@ export function CabinetLlmSettingsPage() {
           >
             {messages.cabinet.llmSettings.backToLibrary}
           </Link>
+          <Link
+            to="/cabinet/admin/users"
+            className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          >
+            {messages.cabinet.library.userAdmin}
+          </Link>
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${keyConfigured ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>
             {keyConfigured ? messages.cabinet.llmSettings.keyConfigured : messages.cabinet.llmSettings.keyMissing}
           </span>

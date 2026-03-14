@@ -20,6 +20,7 @@ import {
   serializeSessionCookie
 } from "./cabinet/auth.mjs";
 import { readCabinetConfig } from "./cabinet/config.mjs";
+import { createCabinetAdminUsersService } from "./cabinet/admin-users.mjs";
 import { createMaterialSimplifyService } from "./cabinet/material-simplify.mjs";
 import { syncMaterialsFromRegistry } from "./cabinet/materials-registry.mjs";
 import { hashPassword, verifyPasswordWithFallback } from "./cabinet/passwords.mjs";
@@ -86,6 +87,9 @@ const materialSimplifyService = createMaterialSimplifyService({
   repoRoot,
   llmConfig: llmSimplifyConfig,
   client: llmClient
+});
+const cabinetAdminUsersService = createCabinetAdminUsersService({
+  database: db
 });
 
 const app = express();
@@ -717,6 +721,224 @@ app.post("/api/cabinet/admin/llm-simplify/test-connection", async (request, resp
         "infra",
         "cabinet llm connection test failed"
       )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.get("/api/cabinet/admin/users", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/admin-users-list-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const result = cabinetAdminUsersService.listUsers();
+    logger.info({
+      event: "cabinet_admin_users_completed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-list-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role,
+        action: "list",
+        item_count: result.items.length
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      items: result.items
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_admin_users_failed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-list-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/users"
+      },
+      error: createObsError("cabinet.admin_users_list_failed", "internal", true, "infra", "cabinet admin users list failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/admin/users", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/admin-users-create-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const result = cabinetAdminUsersService.createViewer(request.body ?? {});
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_admin_users_completed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-create-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role,
+        action: "create_viewer",
+        target_user_id: result.item.id
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      item: result.item
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_admin_users_failed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-create-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/users"
+      },
+      error: createObsError("cabinet.admin_users_create_failed", "internal", true, "infra", "cabinet admin users create failed")
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/admin/users/:id/reset-password", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/admin-users-reset-password-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const userId = readString(request.params.id);
+    if (!userId) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "User id is required."
+      });
+    }
+
+    const result = cabinetAdminUsersService.resetPassword(userId, request.body ?? {});
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_admin_users_completed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-reset-password-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role,
+        action: "reset_password",
+        target_user_id: result.item.id
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      item: result.item
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_admin_users_failed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-reset-password-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/users/:id/reset-password"
+      },
+      error: createObsError(
+        "cabinet.admin_users_reset_password_failed",
+        "internal",
+        true,
+        "infra",
+        "cabinet admin users reset password failed"
+      )
+    });
+    return jsonError(response, 500, {
+      code: "internal_error",
+      message: "Unexpected server error."
+    });
+  }
+});
+
+app.post("/api/cabinet/admin/users/:id/set-active", (request, response) => {
+  const startedAt = Date.now();
+
+  try {
+    const adminSession = requireCabinetAdmin(request, response, startedAt, "cabinet/admin-users-set-active-handler");
+    if (!adminSession) {
+      return undefined;
+    }
+
+    const userId = readString(request.params.id);
+    if (!userId) {
+      return jsonError(response, 400, {
+        code: "invalid_input",
+        message: "User id is required."
+      });
+    }
+
+    const result = cabinetAdminUsersService.setActive(userId, request.body ?? {}, adminSession.userId);
+    if (!result.ok) {
+      return jsonError(response, result.error.status, result.error.body);
+    }
+
+    logger.info({
+      event: "cabinet_admin_users_completed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-set-active-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 200,
+        role: adminSession.role,
+        action: result.item.is_active ? "activate" : "deactivate",
+        target_user_id: result.item.id
+      }
+    });
+
+    return response.status(200).json({
+      ok: true,
+      item: result.item
+    });
+  } catch {
+    logger.error({
+      event: "cabinet_admin_users_failed",
+      domain: "cabinet",
+      module: "cabinet/admin-users-set-active-handler",
+      duration_ms: elapsedMs(startedAt),
+      payload: {
+        status_code: 500,
+        endpoint: "/api/cabinet/admin/users/:id/set-active"
+      },
+      error: createObsError("cabinet.admin_users_set_active_failed", "internal", true, "infra", "cabinet admin users set active failed")
     });
     return jsonError(response, 500, {
       code: "internal_error",
