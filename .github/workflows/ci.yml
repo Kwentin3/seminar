@@ -380,7 +380,7 @@ jobs:
           docker network inspect edge >/dev/null
           docker pull "${SEMINAR_IMAGE}"
 
-          export APP_ROUTER_NAME="seminar"
+          export APP_ROUTER_NAME="seminar-smoke"
           export APP_HOST_RULE='Host(`seminar-ai.ru`) || Host(`www.seminar-ai.ru`)'
           export APP_SERVICE_PORT="8787"
           export TRAEFIK_CERTRESOLVER="le"
@@ -388,7 +388,7 @@ jobs:
           export TRAEFIK_ENTRYPOINTS_WEBSECURE="websecure"
           export APP_ENABLE_WWW_REDIRECT="1"
           export APP_WWW_REDIRECT_TO="seminar-ai.ru"
-          export APP_MIDDLEWARES="seminar-www-redirect"
+          export APP_MIDDLEWARES="seminar-smoke-www-redirect"
 
           docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml config > /tmp/seminar-smoke.effective.yml
           grep -n "traefik.http.routers.${APP_ROUTER_NAME}-web.rule" /tmp/seminar-smoke.effective.yml
@@ -396,30 +396,30 @@ jobs:
           grep -n "traefik.http.services.${APP_ROUTER_NAME}-svc.loadbalancer.server.port" /tmp/seminar-smoke.effective.yml
 
           install -d -m 750 /opt/seminar/parity-data
-          if docker ps -a --format '{{.Names}}' | grep -qx 'seminar-app'; then
-            docker rm -f seminar-app
+          if docker ps -a --format '{{.Names}}' | grep -qx 'seminar-app-smoke'; then
+            docker rm -f seminar-app-smoke
           fi
 
           SEMINAR_IMAGE="${SEMINAR_IMAGE}" BUILD_ID="${BUILD_ID}" \
             docker compose -f /opt/seminar/compose.seminar.ghcr-smoke.yml up -d --remove-orphans
 
           for i in $(seq 1 60); do
-            HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app)"
+            HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app-smoke)"
             if [[ "${HEALTH}" == "healthy" ]]; then
               break
             fi
             sleep 2
           done
 
-          HEALTH_FINAL="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app)"
+          HEALTH_FINAL="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' seminar-app-smoke)"
           if [[ "${HEALTH_FINAL}" != "healthy" ]]; then
-            docker ps --filter name=seminar-app
-            docker logs --tail 200 seminar-app || true
-            echo "seminar-app health is ${HEALTH_FINAL}"
+            docker ps --filter name=seminar-app-smoke
+            docker logs --tail 200 seminar-app-smoke || true
+            echo "seminar-app-smoke health is ${HEALTH_FINAL}"
             exit 1
           fi
 
-          RUNTIME_IMAGE="$(docker inspect -f '{{.Config.Image}}' seminar-app)"
+          RUNTIME_IMAGE="$(docker inspect -f '{{.Config.Image}}' seminar-app-smoke)"
           if [[ "${RUNTIME_IMAGE}" != "${SEMINAR_IMAGE}" ]]; then
             echo "runtime image mismatch: ${RUNTIME_IMAGE} vs ${SEMINAR_IMAGE}"
             exit 1
@@ -430,13 +430,13 @@ jobs:
             exit 1
           fi
 
-          RUNTIME_BUILD_ID="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app | sed -n 's/^BUILD_ID=//p' | head -n1)"
+          RUNTIME_BUILD_ID="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app-smoke | sed -n 's/^BUILD_ID=//p' | head -n1)"
           if [[ "${RUNTIME_BUILD_ID}" != "${BUILD_ID}" ]]; then
             echo "build_id mismatch: ${RUNTIME_BUILD_ID} vs ${BUILD_ID}"
             exit 1
           fi
 
-          OBS_SOURCE="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app | sed -n 's/^OBS_LOG_SOURCE=//p' | head -n1)"
+          OBS_SOURCE="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' seminar-app-smoke | sed -n 's/^OBS_LOG_SOURCE=//p' | head -n1)"
           if [[ "${OBS_SOURCE}" != "docker" ]]; then
             echo "OBS_LOG_SOURCE mismatch: ${OBS_SOURCE}"
             exit 1
@@ -450,19 +450,19 @@ jobs:
 
           if [[ "${ROOT_CODE}" != "200" || "${HEALTH_CODE}" != "200" || "${OBS_CODE}" != "200" ]]; then
             echo "smoke failed root=${ROOT_CODE} health=${HEALTH_CODE} obs=${OBS_CODE}"
-            docker logs --tail 200 seminar-app || true
+            docker logs --tail 200 seminar-app-smoke || true
             exit 1
           fi
 
-          JOURNAL_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app 2>&1 | grep -c 'spawn journalctl ENOENT' || true)"
-          DOCKER_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app 2>&1 | grep -c 'spawn docker ENOENT' || true)"
+          JOURNAL_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app-smoke 2>&1 | grep -c 'spawn journalctl ENOENT' || true)"
+          DOCKER_ENOENT_COUNT="$(docker logs --tail 1000 seminar-app-smoke 2>&1 | grep -c 'spawn docker ENOENT' || true)"
           if [[ "${JOURNAL_ENOENT_COUNT}" != "0" || "${DOCKER_ENOENT_COUNT}" != "0" ]]; then
             echo "enoent signatures detected: journalctl=${JOURNAL_ENOENT_COUNT} docker=${DOCKER_ENOENT_COUNT}"
             exit 1
           fi
 
           echo "runtime_image=${RUNTIME_IMAGE}"
-          echo "container_id=$(docker inspect -f '{{.Id}}' seminar-app)"
+          echo "container_id=$(docker inspect -f '{{.Id}}' seminar-app-smoke)"
           echo "smoke_root=${ROOT_CODE}"
           echo "smoke_health=${HEALTH_CODE}"
           echo "smoke_obs=${OBS_CODE}"

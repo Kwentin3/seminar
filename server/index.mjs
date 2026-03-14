@@ -406,7 +406,9 @@ app.get("/api/cabinet/materials/:slug/simplify", async (request, response) => {
         status_code: 200,
         slug,
         role: cabinetSession.role,
-        simplify_status: result.state.status
+        simplify_status: result.state.status,
+        error_code: result.state.error_code,
+        delivery_mode: result.state.delivery_mode
       }
     });
 
@@ -472,6 +474,8 @@ app.post("/api/cabinet/materials/:slug/simplify", async (request, response) => {
         slug,
         role: cabinetSession.role,
         simplify_status: result.state.status,
+        error_code: result.state.error_code,
+        delivery_mode: result.state.delivery_mode,
         force
       }
     });
@@ -537,6 +541,8 @@ app.post("/api/cabinet/materials/:slug/simplify/regenerate", async (request, res
         slug,
         role: cabinetSession.role,
         simplify_status: result.state.status,
+        error_code: result.state.error_code,
+        delivery_mode: result.state.delivery_mode,
         force: true
       }
     });
@@ -688,7 +694,8 @@ app.post("/api/cabinet/admin/llm-simplify/test-connection", async (request, resp
       payload: {
         status_code: 200,
         role: adminSession.role,
-        connection_status: result.status
+        connection_status: result.status,
+        error_code: result.error_code
       }
     });
 

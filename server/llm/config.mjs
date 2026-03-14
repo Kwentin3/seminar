@@ -27,7 +27,8 @@ export function readLlmSimplifyConfig(env) {
     provider: "deepseek",
     apiKey: readString(env.DEEPSEEK_API_KEY),
     baseUrl: normalizeBaseUrl(env.DEEPSEEK_BASE_URL),
-    requestTimeoutMs: readPositiveInt(env.LLM_SIMPLIFY_TIMEOUT_MS, 45_000),
-    maxSourceChars: readPositiveInt(env.LLM_SIMPLIFY_MAX_SOURCE_CHARS, 20_000)
+    requestTimeoutMs: readPositiveInt(env.LLM_SIMPLIFY_TIMEOUT_MS, 75_000),
+    maxSourceChars: readPositiveInt(env.LLM_SIMPLIFY_MAX_SOURCE_CHARS, 20_000),
+    defaultMaxOutputTokens: readPositiveInt(env.LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS, 900)
   };
 }

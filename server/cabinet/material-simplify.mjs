@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { logger } from "../obs/logger.mjs";
 
 const FEATURE_KIND = "simple_retell";
 const SETTINGS_ROW_ID = "default";
@@ -117,6 +118,19 @@ function createConfigHash(settings) {
   );
 }
 
+function truncateDiagnosticMessage(value, maxLength = 160) {
+  const normalized = readString(value)?.replace(/\s+/g, " ");
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
 function mapStoredStatus(row) {
   if (!row) {
     return null;
@@ -213,10 +227,31 @@ function normalizeStoredError(error) {
     };
   }
 
+  if (code === "upstream_http_error") {
+    return {
+      error_code: code,
+      error_message: "Провайдер временно недоступен. Попробуйте позже."
+    };
+  }
+
   if (code === "rate_limit") {
     return {
       error_code: code,
       error_message: "Провайдер временно ограничил запросы. Попробуйте позже."
+    };
+  }
+
+  if (code === "response_parse_error") {
+    return {
+      error_code: code,
+      error_message: "Провайдер вернул неожиданный ответ. Попробуйте позже."
+    };
+  }
+
+  if (code === "empty_response") {
+    return {
+      error_code: code,
+      error_message: "Провайдер вернул пустой ответ. Попробуйте перегенерировать."
     };
   }
 
@@ -230,6 +265,46 @@ function normalizeStoredError(error) {
   return {
     error_code: code,
     error_message: "Не удалось получить пересказ."
+  };
+}
+
+function getEffectiveMaxOutputTokens(settings, llmConfig) {
+  if (typeof settings.max_output_tokens === "number" && Number.isInteger(settings.max_output_tokens) && settings.max_output_tokens > 0) {
+    return settings.max_output_tokens;
+  }
+
+  return llmConfig.defaultMaxOutputTokens;
+}
+
+function getProviderDiagnostics(error) {
+  const diagnostics = error?.diagnostics;
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return {
+      stage: null,
+      provider_http_status: null,
+      provider_message: null,
+      abort_fired: false,
+      provider_duration_ms: null,
+      response_content_type: null,
+      response_body_length: null
+    };
+  }
+
+  return {
+    stage: readString(diagnostics.stage),
+    provider_http_status:
+      typeof diagnostics.provider_http_status === "number" && Number.isInteger(diagnostics.provider_http_status)
+        ? diagnostics.provider_http_status
+        : null,
+    provider_message: truncateDiagnosticMessage(diagnostics.provider_message),
+    abort_fired: diagnostics.abort_fired === true,
+    provider_duration_ms:
+      typeof diagnostics.duration_ms === "number" && Number.isFinite(diagnostics.duration_ms) ? diagnostics.duration_ms : null,
+    response_content_type: readString(diagnostics.response_content_type),
+    response_body_length:
+      typeof diagnostics.response_body_length === "number" && Number.isFinite(diagnostics.response_body_length)
+        ? diagnostics.response_body_length
+        : null
   };
 }
 
@@ -612,9 +687,13 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
         settings,
         llmConfig,
         keyConfigured: !!llmConfig.apiKey,
+        effectiveMaxOutputTokens: getEffectiveMaxOutputTokens(settings, llmConfig),
         sourceHash: createSourceHash(material, markdown),
         promptHash: createPromptHash(settings.system_prompt),
-        configHash: createConfigHash(settings)
+        configHash: createConfigHash({
+          ...settings,
+          max_output_tokens: getEffectiveMaxOutputTokens(settings, llmConfig)
+        })
       }
     };
   }
@@ -726,17 +805,35 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
       }, llmConfig.requestTimeoutMs);
 
       try {
+        logger.info({
+          event: "cabinet_material_simplify_provider_call_started",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            timeout_ms: llmConfig.requestTimeoutMs,
+            max_output_tokens: context.effectiveMaxOutputTokens,
+            source_chars: context.markdown.length,
+            cache_intent: force ? "regenerate" : "cache_miss",
+            abort_fired: false
+          }
+        });
+
         const completion = await client.createChatCompletion({
           model: context.settings.model,
           systemPrompt: context.settings.system_prompt,
           userPrompt: createUserPrompt(context.material, context.markdown),
           temperature: context.settings.temperature,
-          maxOutputTokens: context.settings.max_output_tokens,
+          maxOutputTokens: context.effectiveMaxOutputTokens,
           signal: abortController.signal
         });
 
         const completedAt = new Date().toISOString();
         const content = completion.content.trim();
+        const providerDiagnostics = getProviderDiagnostics(completion);
         upsertSimplificationRow(database, {
           id: currentRow?.id ?? randomUUID(),
           material_id: context.material.id,
@@ -756,6 +853,25 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
           generated_at: completedAt
         });
 
+        logger.info({
+          event: "cabinet_material_simplify_provider_call_completed",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            timeout_ms: llmConfig.requestTimeoutMs,
+            max_output_tokens: context.effectiveMaxOutputTokens,
+            source_chars: context.markdown.length,
+            cache_intent: force ? "regenerate" : "cache_miss",
+            provider_http_status: providerDiagnostics.provider_http_status,
+            provider_duration_ms: providerDiagnostics.provider_duration_ms,
+            abort_fired: providerDiagnostics.abort_fired
+          }
+        });
+
         return {
           ok: true,
           state: makeState(mapContextToBase(context), {
@@ -770,6 +886,7 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
       } catch (error) {
         const failedAt = new Date().toISOString();
         const storedError = normalizeStoredError(error);
+        const providerDiagnostics = getProviderDiagnostics(error);
         upsertSimplificationRow(database, {
           id: currentRow?.id ?? randomUUID(),
           material_id: context.material.id,
@@ -787,6 +904,30 @@ export function createMaterialSimplifyService({ database, repoRoot, llmConfig, c
           created_at: currentRow?.created_at ?? now,
           updated_at: failedAt,
           generated_at: null
+        });
+
+        logger.warn({
+          event: "cabinet_material_simplify_provider_call_failed",
+          domain: "cabinet",
+          module: "cabinet/material-simplify-service",
+          payload: {
+            slug: context.material.slug,
+            material_id: context.material.id,
+            provider: context.settings.provider,
+            model: context.settings.model,
+            timeout_ms: llmConfig.requestTimeoutMs,
+            max_output_tokens: context.effectiveMaxOutputTokens,
+            source_chars: context.markdown.length,
+            cache_intent: force ? "regenerate" : "cache_miss",
+            error_code: storedError.error_code,
+            error_stage: providerDiagnostics.stage,
+            provider_http_status: providerDiagnostics.provider_http_status,
+            provider_message: providerDiagnostics.provider_message,
+            provider_duration_ms: providerDiagnostics.provider_duration_ms,
+            response_content_type: providerDiagnostics.response_content_type,
+            response_body_length: providerDiagnostics.response_body_length,
+            abort_fired: providerDiagnostics.abort_fired
+          }
         });
 
         return {

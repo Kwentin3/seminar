@@ -1,11 +1,34 @@
 export class DeepSeekClientError extends Error {
-  constructor(message, { code, status = 500, retryable = false } = {}) {
+  constructor(message, { code, status = 500, retryable = false, diagnostics = null } = {}) {
     super(message);
     this.name = "DeepSeekClientError";
     this.code = code ?? "provider_error";
     this.status = status;
     this.retryable = retryable;
+    this.diagnostics = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
   }
+}
+
+function readString(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function truncateMessage(value, maxLength = 160) {
+  const normalized = readString(value)?.replace(/\s+/g, " ");
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1)}…`;
 }
 
 function normalizeErrorPayload(payload) {
@@ -31,13 +54,18 @@ function readResponseText(payload) {
   return typeof content === "string" && content.trim().length > 0 ? content.trim() : null;
 }
 
-function toProviderError(responseStatus, payload) {
+function toProviderError(responseStatus, payload, diagnostics = null) {
   const normalized = normalizeErrorPayload(payload);
   if (responseStatus === 401 || responseStatus === 403) {
     return new DeepSeekClientError(normalized?.message ?? "DeepSeek API key is invalid.", {
       code: "invalid_key",
       status: responseStatus,
-      retryable: false
+      retryable: false,
+      diagnostics: {
+        ...diagnostics,
+        provider_http_status: responseStatus,
+        provider_message: truncateMessage(normalized?.message)
+      }
     });
   }
 
@@ -45,14 +73,37 @@ function toProviderError(responseStatus, payload) {
     return new DeepSeekClientError(normalized?.message ?? "DeepSeek rate limit exceeded.", {
       code: "rate_limit",
       status: responseStatus,
-      retryable: true
+      retryable: true,
+      diagnostics: {
+        ...diagnostics,
+        provider_http_status: responseStatus,
+        provider_message: truncateMessage(normalized?.message)
+      }
+    });
+  }
+
+  if (responseStatus >= 500) {
+    return new DeepSeekClientError(normalized?.message ?? "DeepSeek upstream returned an HTTP error.", {
+      code: "upstream_http_error",
+      status: responseStatus,
+      retryable: true,
+      diagnostics: {
+        ...diagnostics,
+        provider_http_status: responseStatus,
+        provider_message: truncateMessage(normalized?.message)
+      }
     });
   }
 
   return new DeepSeekClientError(normalized?.message ?? "DeepSeek request failed.", {
     code: "provider_error",
     status: responseStatus,
-    retryable: responseStatus >= 500
+    retryable: false,
+    diagnostics: {
+      ...diagnostics,
+      provider_http_status: responseStatus,
+      provider_message: truncateMessage(normalized?.message)
+    }
   });
 }
 
@@ -94,6 +145,8 @@ export function createDeepSeekClient(config, options = {}) {
         stream: false
       };
 
+      const startedAt = Date.now();
+
       if (typeof temperature === "number" && Number.isFinite(temperature)) {
         body.temperature = temperature;
       }
@@ -114,43 +167,93 @@ export function createDeepSeekClient(config, options = {}) {
           signal
         });
       } catch (error) {
-        if (signal?.aborted) {
+        const durationMs = Date.now() - startedAt;
+        const abortFired = signal?.aborted === true || error?.name === "AbortError";
+        if (abortFired) {
           throw new DeepSeekClientError("DeepSeek request timed out.", {
             code: "timeout",
             status: 504,
-            retryable: true
+            retryable: true,
+            diagnostics: {
+              stage: "transport",
+              duration_ms: durationMs,
+              abort_fired: true,
+              provider_http_status: null,
+              provider_message: null
+            }
           });
         }
 
         throw new DeepSeekClientError("DeepSeek request failed before completion.", {
           code: "provider_error",
           status: 502,
-          retryable: true
+          retryable: true,
+          diagnostics: {
+            stage: "transport",
+            duration_ms: durationMs,
+            abort_fired: false,
+            provider_http_status: null,
+            provider_message: truncateMessage(error?.message)
+          }
         });
       }
 
+      const responseText = await response.text();
+      const durationMs = Date.now() - startedAt;
       let payload = null;
       try {
-        payload = await response.json();
+        payload = JSON.parse(responseText);
       } catch {
-        payload = null;
+        if (response.ok) {
+          throw new DeepSeekClientError("DeepSeek returned malformed JSON.", {
+            code: "response_parse_error",
+            status: 502,
+            retryable: true,
+            diagnostics: {
+              stage: "response_json",
+              duration_ms: durationMs,
+              abort_fired: signal?.aborted === true,
+              provider_http_status: response.status,
+              provider_message: null,
+              response_content_type: response.headers.get("content-type"),
+              response_body_length: responseText.length
+            }
+          });
+        }
       }
 
       if (!response.ok) {
-        throw toProviderError(response.status, payload);
+        throw toProviderError(response.status, payload, {
+          stage: "upstream_http",
+          duration_ms: durationMs,
+          abort_fired: signal?.aborted === true
+        });
       }
 
       const content = readResponseText(payload);
       if (!content) {
         throw new DeepSeekClientError("DeepSeek returned an empty completion.", {
-          code: "provider_error",
+          code: "empty_response",
           status: 502,
-          retryable: true
+          retryable: true,
+          diagnostics: {
+            stage: "extract_content",
+            duration_ms: durationMs,
+            abort_fired: signal?.aborted === true,
+            provider_http_status: response.status,
+            provider_message: null
+          }
         });
       }
 
       return {
-        content
+        content,
+        diagnostics: {
+          stage: "completed",
+          duration_ms: durationMs,
+          abort_fired: signal?.aborted === true,
+          provider_http_status: response.status
+        }
       };
     }
   };

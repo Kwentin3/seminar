@@ -49,8 +49,9 @@ Optional simplify env:
 ```bash
 DEEPSEEK_API_KEY=replace_with_deepseek_api_key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-LLM_SIMPLIFY_TIMEOUT_MS=45000
+LLM_SIMPLIFY_TIMEOUT_MS=75000
 LLM_SIMPLIFY_MAX_SOURCE_CHARS=20000
+LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS=900
 ```
 
 Bootstrap behavior:

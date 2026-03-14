@@ -6,14 +6,14 @@ name: seminar-ghcr-smoke
 services:
   seminar-app:
     image: ${SEMINAR_IMAGE:?SEMINAR_IMAGE is required}
-    container_name: seminar-app
+    container_name: seminar-app-smoke
     env_file:
       - /etc/seminar/seminar.docker.env
     environment:
       HOST: "0.0.0.0"
       PORT: "8787"
       OBS_LOG_SOURCE: "docker"
-      OBS_DOCKER_CONTAINER: "seminar-app"
+      OBS_DOCKER_CONTAINER: "seminar-app-smoke"
       OBS_DOCKER_BIN: "/usr/bin/docker"
       BUILD_ID: ${BUILD_ID:?BUILD_ID is required}
     volumes:

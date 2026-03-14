@@ -34,8 +34,9 @@
 8. Optional LLM simplify env:
    - `DEEPSEEK_API_KEY` (env only; do not store in SQLite/UI)
    - `DEEPSEEK_BASE_URL` (defaults to `https://api.deepseek.com`)
-   - `LLM_SIMPLIFY_TIMEOUT_MS` (defaults to `45000`)
+   - `LLM_SIMPLIFY_TIMEOUT_MS` (defaults to `75000`)
    - `LLM_SIMPLIFY_MAX_SOURCE_CHARS` (defaults to `20000`)
+   - `LLM_SIMPLIFY_DEFAULT_MAX_OUTPUT_TOKENS` (defaults to `900`)
 9. Runtime interpretation:
    - local `node server/index.mjs` is the only expected local flow;
    - Docker + Traefik is the canonical production contour;
